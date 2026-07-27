@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Epoxy Coating Formulator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Epoxy coatings calculator</p>
+          <h1>Build and balance epoxy and amine formulations</h1>
+          <p>
+            Enter epoxy and amine components with equivalent weights, define blend
+            percentages, add wetting aids, antifoams, fillers, and calculate the
+            resulting formulation.
+          </p>
+        </div>
+      </header>
+
+      <main class="grid-layout">
+        <div class="grid">
+          <section class="card">
+            <div class="card-header">
+              <h2>Formulation setup</h2>
+              <div class="toolbar-controls">
+                <div class="inline-field">
+                  <label for="template-select">Saved template</label>
+                  <select id="template-select"></select>
+                </div>
+                <div class="inline-field">
+                  <label for="total-weight">Total formulation weight</label>
+                  <input id="total-weight" type="number" min="1" step="1" value="100" />
+                </div>
+                <div class="toolbar-actions">
+                  <button type="button" class="secondary" id="save-template">Save template</button>
+                  <button type="button" class="secondary" id="save-material">Save material</button>
+                  <button type="button" class="secondary" id="export-csv">Export CSV</button>
+                  <button type="button" class="secondary" id="export-pdf">Export PDF</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-toolbar">
+              <h3>Epoxy blend</h3>
+              <button type="button" class="secondary" id="add-epoxy">Add epoxy</button>
+            </div>
+            <div id="epoxy-rows"></div>
+
+            <div class="section-toolbar">
+              <h3>Amine blend</h3>
+              <button type="button" class="secondary" id="add-amine">Add amine</button>
+            </div>
+            <div id="amine-rows"></div>
+
+            <div class="section-toolbar">
+              <h3>Additives & fillers</h3>
+              <button type="button" class="secondary" id="add-additive">Add row</button>
+            </div>
+            <div id="additive-rows"></div>
+
+            <div class="actions">
+              <button id="calculate-btn">Calculate formulation</button>
+              <button id="reset-btn" class="ghost">Reset example</button>
+            </div>
+          </section>
+
+          <section class="card results-panel">
+            <h2>Results</h2>
+            <div id="summary" class="summary"></div>
+            <div id="results-list" class="results-list"></div>
+          </section>
+        </div>
+
+        <section class="card formula-box">
+          <h2>Formula in grams</h2>
+          <p class="formula-subtitle">A simple gram-based breakdown for the current formulation.</p>
+          <div id="formula-grams" class="formula-grams"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
