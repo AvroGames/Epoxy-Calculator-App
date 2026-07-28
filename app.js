@@ -194,11 +194,11 @@ function getBalanceState(epoxyBlendEq, amineBlendEq) {
 function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass, totalWeight, additiveMass, warnings, balance) {
   return `
     <div class="summary-grid">
-      <div class="summary-row"><span>Target formulation weight</span><strong>${formatNumber(totalWeight)} parts</strong></div>
-      <div class="summary-row"><span>Reactive mass (epoxy + amine)</span><strong>${formatNumber(epoxyBlendMass + amineBlendMass)} parts</strong></div>
+      <div class="summary-row"><span>Target formulation weight</span><strong>${formatNumber(totalWeight)} g</strong></div>
+      <div class="summary-row"><span>Reactive mass (epoxy + amine)</span><strong>${formatNumber(epoxyBlendMass + amineBlendMass)} g</strong></div>
       <div class="summary-row"><span>Epoxy blend eq. weight</span><strong>${formatNumber(epoxyBlendEq)}</strong></div>
       <div class="summary-row"><span>Amine blend eq. weight</span><strong>${formatNumber(amineBlendEq)}</strong></div>
-      <div class="summary-row"><span>Additives and fillers</span><strong>${formatNumber(additiveMass)} parts</strong></div>
+      <div class="summary-row"><span>Additives and fillers</span><strong>${formatNumber(additiveMass)} g</strong></div>
     </div>
     <div class="balance-pill ${balance.className}">${balance.message}</div>
     ${warnings.length ? `<div class="warning">${warnings.join(' ')}</div>` : ''}
@@ -206,9 +206,9 @@ function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass
 }
 
 function buildResults(epoxyRows, amineRows, additives) {
-  const epoxyCards = epoxyRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of blend)</li>`).join('');
-  const amineCards = amineRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of blend)</li>`).join('');
-  const additiveCards = additives.map((row) => `<li>${row.type}: ${row.name} — ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
+  const epoxyCards = epoxyRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of blend)</li>`).join('');
+  const amineCards = amineRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of blend)</li>`).join('');
+  const additiveCards = additives.map((row) => `<li>${row.type}: ${row.name} — ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
 
   return `
     <div class="result-card">
