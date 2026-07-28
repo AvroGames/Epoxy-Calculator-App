@@ -103,7 +103,7 @@ function createRowMarkup(type, data = {}) {
             <option value="Filler" ${data.type === 'Filler' ? 'selected' : ''}>Filler</option>
           </select>
           <input class="name-input" type="text" placeholder="Additive or filler name" value="${data.name || ''}" />
-          <input class="percentage-input" type="number" min="0" step="0.01" placeholder="% of total" value="${data.percentage || ''}" />
+          <input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="% of total" value="${data.percentage || ''}" />
         </div>
         <button class="icon-button remove-row" type="button">Remove</button>
       </div>
@@ -116,7 +116,7 @@ function createRowMarkup(type, data = {}) {
         <select class="material-select">${createMaterialOptions(type)}</select>
         <input class="name-input" type="text" placeholder="Component name" value="${data.name || ''}" />
         <input class="eq-weight-input" type="number" min="0" step="0.01" placeholder="Eq. weight" value="${data.eqWeight || ''}" />
-        <input class="percentage-input" type="number" min="0" step="0.01" placeholder="Relative % vs first" value="${data.percentage || ''}" />
+        <input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="% of blend" value="${data.percentage || ''}" />
       </div>
       <button class="icon-button remove-row" type="button">Remove</button>
     </div>
@@ -160,21 +160,17 @@ function normalizeBlendRatios(rows) {
     return [];
   }
 
-  const relativeWeights = rows.map((row, index) => {
-    if (index === 0) {
-      return 1;
-    }
+  const normalizedRows = rows.map((row) => ({
+    ...row,
+    percentage: Number.isFinite(parseFloat(row.percentage)) ? parseFloat(row.percentage) : 0,
+  }));
 
-    const value = parseFloat(row.percentage);
-    return Number.isFinite(value) && value > 0 ? value / 100 : 0;
-  });
-
-  const total = relativeWeights.reduce((sum, weight) => sum + weight, 0);
+  const total = normalizedRows.reduce((sum, row) => sum + row.percentage, 0);
   if (total <= 0) {
-    return rows.map((row, index) => ({ ...row, percentage: index === 0 ? 1 : 0 }));
+    return normalizedRows.map((row, index) => ({ ...row, percentage: index === 0 ? 100 : 0 }));
   }
 
-  return rows.map((row, index) => ({ ...row, percentage: relativeWeights[index] / total }));
+  return normalizedRows.map((row) => ({ ...row, percentage: (row.percentage / total) * 100 }));
 }
 
 function formatNumber(value) {
@@ -210,8 +206,8 @@ function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass
 }
 
 function buildResults(epoxyRows, amineRows, additives) {
-  const epoxyCards = epoxyRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (relative ratio ${formatNumber(row.percentage * 100)}%)</li>`).join('');
-  const amineCards = amineRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (relative ratio ${formatNumber(row.percentage * 100)}%)</li>`).join('');
+  const epoxyCards = epoxyRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of blend)</li>`).join('');
+  const amineCards = amineRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of blend)</li>`).join('');
   const additiveCards = additives.map((row) => `<li>${row.type}: ${row.name} — ${formatNumber(row.mass)} parts (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
 
   return `
