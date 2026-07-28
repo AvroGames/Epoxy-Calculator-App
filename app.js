@@ -300,8 +300,8 @@ function calculateFormulation() {
   const epoxyBlendMass = remainingWeight / (1 + amineToEpoxyRatio);
   const amineBlendMass = epoxyBlendMass * amineToEpoxyRatio;
 
-  const epoxyResultRows = normalizedEpoxy.map((row) => ({ ...row, mass: epoxyBlendMass * row.percentage }));
-  const amineResultRows = normalizedAmine.map((row) => ({ ...row, mass: amineBlendMass * row.percentage }));
+  const epoxyResultRows = normalizedEpoxy.map((row) => ({ ...row, mass: epoxyBlendMass * (row.percentage / 100) }));
+  const amineResultRows = normalizedAmine.map((row) => ({ ...row, mass: amineBlendMass * (row.percentage / 100) }));
   const additiveResultRows = additiveRows.map((row) => ({ ...row, mass: (totalWeight * row.percentage) / 100 }));
 
   const balance = getBalanceState(epoxyBlendEq, amineBlendEq);
