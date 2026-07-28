@@ -698,4 +698,3 @@ if (supabaseClient) {
   setDbStatus('Shared database: not connected. You can still use the app locally.', false);
 }
 populateTemplateSelect();
-resetExample();
