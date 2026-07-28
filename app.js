@@ -9,28 +9,93 @@ const dbStatus = document.getElementById('db-status');
 const supabaseUrlInput = document.getElementById('supabase-url');
 const supabaseKeyInput = document.getElementById('supabase-key');
 
-const epoxyDatabase = [
-  { name: 'Bisphenol A epoxy', eqWeight: 190 },
-  { name: 'Cycloaliphatic epoxy', eqWeight: 230 },
-  { name: 'Flexible epoxy', eqWeight: 260 },
-  { name: 'Novolac epoxy', eqWeight: 180 },
-];
-
-const amineDatabase = [
-  { name: 'Polyether amine D230', eqWeight: 95 },
-  { name: 'Polyether amine D400', eqWeight: 135 },
-  { name: 'Aromatic amine hardener', eqWeight: 110 },
-  { name: 'Cycloaliphatic amine', eqWeight: 80 },
-];
+const systemCatalog = {
+  epoxy: {
+    label: 'Epoxy',
+    description: 'Build epoxy and amine formulations for protective coating systems.',
+    resinLabel: 'Resin blend',
+    curativeLabel: 'Curative blend',
+    materials: {
+      epoxy: [
+        { name: 'Bisphenol A epoxy', eqWeight: 190 },
+        { name: 'Cycloaliphatic epoxy', eqWeight: 230 },
+        { name: 'Flexible epoxy', eqWeight: 260 },
+        { name: 'Novolac epoxy', eqWeight: 180 },
+      ],
+      amine: [
+        { name: 'Polyether amine D230', eqWeight: 95 },
+        { name: 'Polyether amine D400', eqWeight: 135 },
+        { name: 'Aromatic amine hardener', eqWeight: 110 },
+        { name: 'Cycloaliphatic amine', eqWeight: 80 },
+      ],
+    },
+  },
+  polyurethane: {
+    label: 'Polyurethane',
+    description: 'Formulate polyurethane resin and polyol or isocyanate systems.',
+    resinLabel: 'Polyol blend',
+    curativeLabel: 'Isocyanate blend',
+    materials: {
+      epoxy: [
+        { name: 'Polyester polyol', eqWeight: 105 },
+        { name: 'Polyether polyol', eqWeight: 110 },
+        { name: 'Acrylic polyol', eqWeight: 125 },
+      ],
+      amine: [
+        { name: 'MDI hardener', eqWeight: 130 },
+        { name: 'TDI hardener', eqWeight: 110 },
+        { name: 'Aliphatic isocyanate', eqWeight: 140 },
+      ],
+    },
+  },
+  polyaspartic: {
+    label: 'Polyaspartic',
+    description: 'Design fast-curing polyaspartic systems with a reactive amine blend.',
+    resinLabel: 'Polyaspartic resin blend',
+    curativeLabel: 'Amine curative blend',
+    materials: {
+      epoxy: [
+        { name: 'Polyaspartic resin A', eqWeight: 175 },
+        { name: 'Polyaspartic resin B', eqWeight: 190 },
+        { name: 'Flexible polyaspartic resin', eqWeight: 210 },
+      ],
+      amine: [
+        { name: 'Polyaspartic hardener', eqWeight: 90 },
+        { name: 'Cycloaliphatic amine', eqWeight: 100 },
+        { name: 'Aromatic amine', eqWeight: 110 },
+      ],
+    },
+  },
+  acrylic: {
+    label: 'Acrylic',
+    description: 'Balance acrylic binder systems with reactive crosslinkers and modifiers.',
+    resinLabel: 'Acrylic resin blend',
+    curativeLabel: 'Crosslinker blend',
+    materials: {
+      epoxy: [
+        { name: 'Acrylic binder', eqWeight: 220 },
+        { name: 'Hydroxyl acrylic resin', eqWeight: 240 },
+        { name: 'Styrene acrylic resin', eqWeight: 260 },
+      ],
+      amine: [
+        { name: 'Isocyanate crosslinker', eqWeight: 135 },
+        { name: 'Melamine crosslinker', eqWeight: 150 },
+        { name: 'Amino crosslinker', eqWeight: 165 },
+      ],
+    },
+  },
+};
 
 const STORAGE_KEY = 'epoxy-formulator-templates';
 const MATERIALS_KEY = 'epoxy-formulator-materials';
 const DB_CONFIG_KEY = 'epoxy-formulator-db-config';
 
 let supabaseClient = null;
-let materialsState = { epoxy: [], amine: [] };
+let materialsState = {};
 let templatesState = [];
 let dbConnected = false;
+let currentSystem = 'epoxy';
+let uiState = {};
 
 function readMaterials() {
   try {
@@ -42,6 +107,25 @@ function readMaterials() {
 
 function writeMaterials(materials) {
   localStorage.setItem(MATERIALS_KEY, JSON.stringify(materials));
+}
+
+function getSystemConfig(systemKey = currentSystem) {
+  return systemCatalog[systemKey] || systemCatalog.epoxy;
+}
+
+function getSystemMaterials(systemKey = currentSystem) {
+  const stored = readMaterials();
+  if (!stored[systemKey]) {
+    stored[systemKey] = { epoxy: [], amine: [] };
+    writeMaterials(stored);
+  }
+  return stored[systemKey];
+}
+
+function saveSystemMaterials(systemKey, value) {
+  const stored = readMaterials();
+  stored[systemKey] = value;
+  writeMaterials(stored);
 }
 
 function readTemplates() {
@@ -71,9 +155,10 @@ function setDbStatus(message, connected = false) {
 }
 
 function createMaterialOptions(type) {
-  const database = type === 'epoxy' ? epoxyDatabase : amineDatabase;
-  const customMaterials = readMaterials()[type] || [];
-  const remoteMaterials = materialsState[type] || [];
+  const config = getSystemConfig();
+  const database = config.materials[type] || [];
+  const customMaterials = getSystemMaterials(currentSystem)[type] || [];
+  const remoteMaterials = materialsState[currentSystem]?.[type] || [];
   const seen = new Set();
   const items = [];
 
@@ -89,6 +174,131 @@ function createMaterialOptions(type) {
     <option value="">Custom</option>
     ${items.map((item) => `<option value="${item.name}" data-eq="${item.eqWeight}" data-name="${item.name}">${item.name} • eq ${item.eqWeight}</option>`).join('')}
   `;
+}
+
+function renderMaterialsLibrary() {
+  const materials = readMaterials();
+  const library = document.getElementById('materials-library');
+  const familyOrder = ['epoxy', 'polyurethane', 'polyaspartic', 'acrylic'];
+
+  const groups = familyOrder.map((family) => {
+    const familyMaterials = materials[family] || { epoxy: [], amine: [] };
+    const entries = [
+      { title: 'Epoxies / resins', list: familyMaterials.epoxy || [] },
+      { title: 'Curatives / hardeners', list: familyMaterials.amine || [] },
+    ];
+
+    return {
+      family,
+      entries,
+    };
+  });
+
+  library.innerHTML = groups.map((group) => `
+    <div class="material-group">
+      <h3>${systemCatalog[group.family].label}</h3>
+      <div class="material-list">
+        ${group.entries.map((entry) => `
+          <div>
+            <strong>${entry.title}</strong>
+            ${entry.list.length ? entry.list.map((item) => `
+              <div class="material-item">
+                <span>${item.name}</span>
+                <strong>eq ${item.eqWeight}</strong>
+              </div>
+            `).join('') : '<div class="material-item"><span>No saved materials yet</span></div>'}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function setActiveSystemUI() {
+  const config = getSystemConfig();
+  document.getElementById('app-title').textContent = currentSystem === 'materials'
+    ? 'Browse saved materials and equivalent weights'
+    : `Build and balance ${config.label.toLowerCase()} formulations`;
+  document.getElementById('app-description').textContent = currentSystem === 'materials'
+    ? 'Review all saved materials across your coating systems and their equivalent weights.'
+    : config.description;
+  document.getElementById('resin-heading').textContent = config.resinLabel;
+  document.getElementById('curative-heading').textContent = config.curativeLabel;
+  document.querySelectorAll('.tab-button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.system === currentSystem);
+  });
+
+  const formulationView = document.getElementById('formulation-view');
+  const materialsView = document.getElementById('materials-view');
+  if (currentSystem === 'materials') {
+    formulationView.classList.add('hidden');
+    materialsView.classList.add('visible');
+  } else {
+    formulationView.classList.remove('hidden');
+    materialsView.classList.remove('visible');
+  }
+
+  const activeLabel = document.createElement('div');
+  activeLabel.className = 'system-pill';
+  activeLabel.textContent = `${config.label} workflow active`;
+
+  const existingPill = document.querySelector('.system-pill');
+  if (existingPill) {
+    existingPill.remove();
+  }
+
+  document.querySelector('.hero > div').appendChild(activeLabel);
+}
+
+function serializeFormState() {
+  return {
+    totalWeight: parseFloat(document.getElementById('total-weight').value) || 100,
+    epoxy: collectRows(epoxyContainer, 'epoxy'),
+    amine: collectRows(amineContainer, 'amine'),
+    additives: collectRows(additiveContainer, 'additive'),
+  };
+}
+
+function restoreFormState(systemKey) {
+  const state = uiState[systemKey] || {};
+  clearRows(epoxyContainer);
+  clearRows(amineContainer);
+  clearRows(additiveContainer);
+  document.getElementById('total-weight').value = state.totalWeight || 100;
+  (state.epoxy || []).forEach((row) => addRow('epoxy', row));
+  (state.amine || []).forEach((row) => addRow('amine', row));
+  (state.additives || []).forEach((row) => addRow('additive', row));
+
+  if (!state.epoxy?.length && !state.amine?.length && !state.additives?.length) {
+    summary.innerHTML = '';
+    resultsList.innerHTML = '';
+    formulaGrams.innerHTML = '<div class="formula-gram-row"><span>Enter values to see the grams breakdown.</span></div>';
+    return;
+  }
+
+  calculateFormulation();
+}
+
+function switchSystem(systemKey) {
+  if (!systemCatalog[systemKey] && systemKey !== 'materials') {
+    return;
+  }
+
+  uiState[currentSystem] = serializeFormState();
+  currentSystem = systemKey;
+  setActiveSystemUI();
+  if (systemKey !== 'materials') {
+    restoreFormState(systemKey);
+    populateTemplateSelect();
+    refreshMaterialSelects();
+  } else {
+    renderMaterialsLibrary();
+  }
+}
+
+function resetForm() {
+  uiState[currentSystem] = { totalWeight: 100, epoxy: [], amine: [], additives: [] };
+  restoreFormState(currentSystem);
 }
 
 function createRowMarkup(type, data = {}) {
@@ -390,7 +600,7 @@ async function loadRemoteData() {
   try {
     const { data: materialsData, error: materialsError } = await supabaseClient.from('materials').select('*').order('name');
     if (!materialsError) {
-      materialsState = {
+      materialsState[currentSystem] = {
         epoxy: (materialsData || []).filter((item) => item.type === 'epoxy').map((item) => ({ name: item.name, eqWeight: Number(item.eq_weight) })),
         amine: (materialsData || []).filter((item) => item.type === 'amine').map((item) => ({ name: item.name, eqWeight: Number(item.eq_weight) })),
       };
@@ -401,6 +611,7 @@ async function loadRemoteData() {
       templatesState = (templatesData || []).map((item) => ({
         id: item.id,
         name: item.name,
+        system: item.payload?.system || item.system || 'epoxy',
         totalWeight: item.payload?.totalWeight || 100,
         epoxy: item.payload?.epoxy || [],
         amine: item.payload?.amine || [],
@@ -446,7 +657,7 @@ function writeTemplates(templates) {
 
 function populateTemplateSelect() {
   const localTemplates = readTemplates();
-  const allTemplates = [...localTemplates, ...templatesState];
+  const allTemplates = [...localTemplates, ...templatesState].filter((template) => (template.system || 'epoxy') === currentSystem);
   const uniqueTemplates = [];
   const seen = new Set();
 
@@ -473,6 +684,9 @@ function populateTemplateSelect() {
 }
 
 function applyTemplate(template) {
+  if (template.system && template.system !== currentSystem) {
+    switchSystem(template.system);
+  }
   clearRows(epoxyContainer);
   clearRows(amineContainer);
   clearRows(additiveContainer);
@@ -490,7 +704,7 @@ async function saveCurrentTemplate() {
     return;
   }
 
-  const templatePayload = { ...buildTemplatePayload(), name };
+  const templatePayload = { ...buildTemplatePayload(), name, system: currentSystem };
   const templates = readTemplates();
   templates.push(templatePayload);
   writeTemplates(templates);
@@ -499,7 +713,9 @@ async function saveCurrentTemplate() {
     try {
       await supabaseClient.from('templates').insert({
         name: templatePayload.name,
+        system: currentSystem,
         payload: {
+          system: currentSystem,
           totalWeight: templatePayload.totalWeight,
           epoxy: templatePayload.epoxy,
           amine: templatePayload.amine,
@@ -535,11 +751,11 @@ async function saveCurrentMaterial() {
     return;
   }
 
-  const materials = readMaterials();
-  const existing = materials[normalizedType] || [];
+  const systemMaterials = getSystemMaterials(currentSystem);
+  const existing = systemMaterials[normalizedType] || [];
   existing.push({ name: name.trim(), eqWeight });
-  materials[normalizedType] = existing;
-  writeMaterials(materials);
+  systemMaterials[normalizedType] = existing;
+  saveSystemMaterials(currentSystem, systemMaterials);
 
   if (supabaseClient) {
     try {
@@ -553,7 +769,7 @@ async function saveCurrentMaterial() {
     }
   }
 
-  materialsState[normalizedType] = [...materialsState[normalizedType], { name: name.trim(), eqWeight }];
+  materialsState[currentSystem] = systemMaterials;
   refreshMaterialSelects();
   window.alert(`Saved ${name.trim()} to your ${normalizedType} list.`);
 }
@@ -608,7 +824,7 @@ function attachEvents() {
   document.getElementById('add-amine').addEventListener('click', () => addRow('amine'));
   document.getElementById('add-additive').addEventListener('click', () => addRow('additive'));
   document.getElementById('calculate-btn').addEventListener('click', calculateFormulation);
-  document.getElementById('reset-btn').addEventListener('click', resetExample);
+  document.getElementById('reset-btn').addEventListener('click', resetForm);
   document.getElementById('save-template').addEventListener('click', saveCurrentTemplate);
   document.getElementById('save-material').addEventListener('click', saveCurrentMaterial);
   document.getElementById('export-csv').addEventListener('click', exportCsv);
@@ -641,7 +857,7 @@ function attachEvents() {
   });
 
   templateSelect.addEventListener('change', (event) => {
-    const templates = [...readTemplates(), ...templatesState];
+    const templates = [...readTemplates(), ...templatesState].filter((template) => (template.system || 'epoxy') === currentSystem);
     const selected = templates[event.target.value];
     if (selected) {
       applyTemplate(selected);
@@ -688,6 +904,10 @@ function attachEvents() {
 }
 
 attachEvents();
+setActiveSystemUI();
+document.querySelectorAll('.tab-button').forEach((button) => {
+  button.addEventListener('click', () => switchSystem(button.dataset.system));
+});
 const savedConfig = getDbConfig();
 supabaseUrlInput.value = savedConfig.url || '';
 supabaseKeyInput.value = savedConfig.key || '';
@@ -698,3 +918,5 @@ if (supabaseClient) {
   setDbStatus('Shared database: not connected. You can still use the app locally.', false);
 }
 populateTemplateSelect();
+renderMaterialsLibrary();
+resetForm();
