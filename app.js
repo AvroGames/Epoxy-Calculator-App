@@ -805,11 +805,15 @@ async function loadRemoteData() {
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
   } catch (error) {
     const message = error?.message || 'Unknown Supabase error';
+    const details = error?.details || '';
+    const hint = error?.hint || '';
+    const status = error?.status || '';
     console.error('Supabase load failed', error);
     const reason = message.includes('Failed to fetch')
       ? 'The browser could not reach the Supabase API. Check that the URL is the full Project URL from Supabase Settings > API, use the anon key, and that the project is online.'
       : message;
-    setDbStatus(`Supabase connection failed: ${reason}`, false);
+    const fullReason = [reason, status ? `Status: ${status}` : '', details ? `Details: ${details}` : '', hint ? `Hint: ${hint}` : ''].filter(Boolean).join(' | ');
+    setDbStatus(`Supabase connection failed: ${fullReason}`, false);
   }
 }
 
