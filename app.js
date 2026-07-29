@@ -131,6 +131,34 @@ function saveSystemMaterials(systemKey, value) {
   writeMaterials(stored);
 }
 
+function syncLocalMaterialsFromRemote(remoteMaterials) {
+  const stored = readMaterials();
+  Object.entries(remoteMaterials).forEach(([systemKey, systemMaterials]) => {
+    stored[systemKey] = {
+      epoxy: [...(systemMaterials?.epoxy || [])],
+      amine: [...(systemMaterials?.amine || [])],
+    };
+  });
+  writeMaterials(stored);
+}
+
+function syncLocalTemplatesFromRemote(remoteTemplates) {
+  const localTemplates = readTemplates();
+  const mergedTemplates = [...localTemplates, ...remoteTemplates];
+  const deduped = [];
+  const seen = new Set();
+
+  mergedTemplates.forEach((template) => {
+    const key = `${template.name}-${template.system}-${template.totalWeight}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(template);
+    }
+  });
+
+  writeTemplates(deduped);
+}
+
 function readTemplates() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -727,6 +755,7 @@ async function loadRemoteData() {
     if (!materialsState[currentSystem]) {
       materialsState[currentSystem] = { epoxy: [], amine: [] };
     }
+    syncLocalMaterialsFromRemote(remoteMaterials);
 
     const { data: templatesData, error: templatesError } = await supabaseClient.from('templates').select('*').order('name', { ascending: true });
     if (!templatesError) {
@@ -739,6 +768,7 @@ async function loadRemoteData() {
         amine: item.payload?.amine || [],
         additives: item.payload?.additives || [],
       }));
+      syncLocalTemplatesFromRemote(templatesState);
     }
 
     populateTemplateSelect();
@@ -927,6 +957,7 @@ async function saveCurrentMaterial() {
   }
 
   materialsState[currentSystem] = systemMaterials;
+  syncLocalMaterialsFromRemote(materialsState);
   refreshMaterialSelects();
   renderMaterialsLibrary();
   window.alert(`Saved ${name.trim()} to the shared ${normalizedType} list.`);
