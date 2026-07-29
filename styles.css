@@ -67,6 +67,27 @@ body {
   gap: 16px;
 }
 
+.shared-materials-table-shell {
+  overflow-x: auto;
+}
+
+.shared-materials-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+.shared-materials-table th,
+.shared-materials-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.shared-materials-table thead {
+  color: #73b6f6;
+}
+
 .material-group {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;

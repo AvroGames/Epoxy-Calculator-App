@@ -97,6 +97,8 @@ let dbConnected = false;
 let currentSystem = 'epoxy';
 let uiState = {};
 let remoteRefreshTimer = null;
+let materialsSubscription = null;
+let sharedMaterialsRows = [];
 
 function readMaterials() {
   try {
@@ -154,10 +156,8 @@ function setDbStatus(message, connected = false) {
   dbStatus.textContent = message;
   dbStatus.style.color = connected ? '#9be3ae' : '#9eb7ce';
   if (!connected) {
-    if (remoteRefreshTimer) {
-      clearInterval(remoteRefreshTimer);
-      remoteRefreshTimer = null;
-    }
+    stopRemoteRefreshTimer();
+    teardownMaterialsSubscription();
   }
 }
 
@@ -166,6 +166,13 @@ function stopRemoteRefreshTimer() {
     clearInterval(remoteRefreshTimer);
     remoteRefreshTimer = null;
   }
+}
+
+function teardownMaterialsSubscription() {
+  if (materialsSubscription && supabaseClient) {
+    supabaseClient.removeChannel(materialsSubscription);
+  }
+  materialsSubscription = null;
 }
 
 function scheduleRemoteRefresh() {
@@ -177,6 +184,19 @@ function scheduleRemoteRefresh() {
   remoteRefreshTimer = window.setInterval(() => {
     loadRemoteData();
   }, 5000);
+}
+
+function subscribeToMaterialsChanges() {
+  teardownMaterialsSubscription();
+  if (!supabaseClient || !dbConnected) {
+    return;
+  }
+
+  materialsSubscription = supabaseClient.channel('materials-live-updates')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
+      loadRemoteData();
+    })
+    .subscribe();
 }
 
 function createMaterialOptions(type) {
@@ -202,41 +222,33 @@ function createMaterialOptions(type) {
 }
 
 function renderMaterialsLibrary() {
-  const materials = readMaterials();
   const library = document.getElementById('materials-library');
-  const familyOrder = ['epoxy', 'polyurethane', 'polyaspartic', 'acrylic'];
+  const rows = sharedMaterialsRows.length
+    ? sharedMaterialsRows.map((item) => `
+        <tr>
+          <td>${item.name}</td>
+          <td>${item.type === 'amine' ? 'Curative / hardener' : 'Epoxy / resin'}</td>
+          <td>${item.systemLabel}</td>
+          <td>${item.eqWeight}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="4">No materials have been saved to the database yet.</td></tr>';
 
-  const groups = familyOrder.map((family) => {
-    const familyMaterials = materials[family] || { epoxy: [], amine: [] };
-    const entries = [
-      { title: 'Epoxies / resins', list: familyMaterials.epoxy || [] },
-      { title: 'Curatives / hardeners', list: familyMaterials.amine || [] },
-    ];
-
-    return {
-      family,
-      entries,
-    };
-  });
-
-  library.innerHTML = groups.map((group) => `
-    <div class="material-group">
-      <h3>${systemCatalog[group.family].label}</h3>
-      <div class="material-list">
-        ${group.entries.map((entry) => `
-          <div>
-            <strong>${entry.title}</strong>
-            ${entry.list.length ? entry.list.map((item) => `
-              <div class="material-item">
-                <span>${item.name}</span>
-                <strong>eq ${item.eqWeight}</strong>
-              </div>
-            `).join('') : '<div class="material-item"><span>No saved materials yet</span></div>'}
-          </div>
-        `).join('')}
-      </div>
+  library.innerHTML = `
+    <div class="shared-materials-table-shell">
+      <table class="shared-materials-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>System</th>
+            <th>Eq. weight</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>
-  `).join('');
+  `;
 }
 
 function setActiveSystemUI() {
@@ -688,25 +700,35 @@ async function loadRemoteData() {
   }
 
   try {
-    const { data: materialsData, error: materialsError } = await supabaseClient.from('materials').select('*').order('name');
-    if (!materialsError) {
-      const remoteMaterials = (materialsData || []).reduce((accumulator, item) => {
-        const type = item.type === 'amine' ? 'amine' : 'epoxy';
-        const system = item.system || 'epoxy';
-        if (!accumulator[system]) {
-          accumulator[system] = { epoxy: [], amine: [] };
-        }
-        accumulator[system][type].push({ name: item.name, eqWeight: Number(item.eq_weight) });
-        return accumulator;
-      }, {});
-
-      materialsState = remoteMaterials;
-      if (!materialsState[currentSystem]) {
-        materialsState[currentSystem] = { epoxy: [], amine: [] };
-      }
+    const { data: materialsData, error: materialsError } = await supabaseClient.from('materials').select('*').order('name', { ascending: true });
+    if (materialsError) {
+      throw materialsError;
     }
 
-    const { data: templatesData, error: templatesError } = await supabaseClient.from('templates').select('*').order('created_at', { ascending: false });
+    const remoteMaterials = {};
+    const seenMaterials = new Set();
+    sharedMaterialsRows = (materialsData || []).map((item) => {
+      const type = item.type === 'amine' ? 'amine' : 'epoxy';
+      const system = item.system || 'epoxy';
+      const eqWeight = Number(item.eq_weight ?? item.eqWeight ?? 0);
+      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: systemCatalog[system]?.label || system };
+      const key = `${system}:${type}:${normalizedItem.name}:${normalizedItem.eqWeight}`;
+      if (!seenMaterials.has(key)) {
+        seenMaterials.add(key);
+        if (!remoteMaterials[system]) {
+          remoteMaterials[system] = { epoxy: [], amine: [] };
+        }
+        remoteMaterials[system][type].push({ name: normalizedItem.name, eqWeight: normalizedItem.eqWeight });
+      }
+      return normalizedItem;
+    });
+
+    materialsState = remoteMaterials;
+    if (!materialsState[currentSystem]) {
+      materialsState[currentSystem] = { epoxy: [], amine: [] };
+    }
+
+    const { data: templatesData, error: templatesError } = await supabaseClient.from('templates').select('*').order('name', { ascending: true });
     if (!templatesError) {
       templatesState = (templatesData || []).map((item) => ({
         id: item.id,
@@ -722,6 +744,7 @@ async function loadRemoteData() {
     populateTemplateSelect();
     refreshMaterialSelects();
     renderMaterialsLibrary();
+    subscribeToMaterialsChanges();
     scheduleRemoteRefresh();
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
   } catch (error) {
@@ -870,13 +893,14 @@ async function saveCurrentMaterial() {
       await loadRemoteData();
     } catch (error) {
       console.warn('Material save to Supabase failed', error);
+      setDbStatus('The material was saved locally, but the Supabase insert failed.', false);
     }
   }
 
   materialsState[currentSystem] = systemMaterials;
   refreshMaterialSelects();
   renderMaterialsLibrary();
-  window.alert(`Saved ${name.trim()} to your ${normalizedType} list.`);
+  window.alert(`Saved ${name.trim()} to the shared ${normalizedType} list.`);
 }
 
 function buildTemplatePayload() {
