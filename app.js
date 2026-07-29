@@ -246,22 +246,54 @@ function subscribeToMaterialsChanges() {
     .subscribe();
 }
 
-function createMaterialOptions(type) {
-  const remoteMaterials = materialsState[currentSystem]?.[type] || [];
+function getMergedMaterialOptions(type) {
+  const collected = [];
   const seen = new Set();
-  const items = [];
 
-  remoteMaterials.forEach((item) => {
-    const key = `${item.name}-${item.eqWeight}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      items.push(item);
+  const addItems = (items) => {
+    (items || []).forEach((item) => {
+      const key = `${item.name}-${item.eqWeight}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        collected.push(item);
+      }
+    });
+  };
+
+  addItems((sharedMaterialsRows || []).filter((item) => item.type === type));
+
+  Object.values(materialsState || {}).forEach((systemMaterials) => {
+    if (!systemMaterials || typeof systemMaterials !== 'object') {
+      return;
     }
+
+    const items = Array.isArray(systemMaterials[type]) ? systemMaterials[type] : [];
+    addItems(items);
   });
 
+  const fallbackItems = [];
+  Object.values(materialsState || {}).forEach((systemMaterials) => {
+    if (!systemMaterials || typeof systemMaterials !== 'object') {
+      return;
+    }
+
+    const alternateType = type === 'amine' ? 'epoxy' : 'amine';
+    const alternateItems = Array.isArray(systemMaterials[alternateType]) ? systemMaterials[alternateType] : [];
+    fallbackItems.push(...alternateItems);
+  });
+
+  if (!collected.length && fallbackItems.length) {
+    addItems(fallbackItems);
+  }
+
+  return collected;
+}
+
+function createMaterialOptions(type) {
+  const remoteMaterials = getMergedMaterialOptions(type);
   return `
     <option value="">custom</option>
-    ${items.map((item) => `<option value="${item.name}" data-eq="${item.eqWeight}" data-name="${item.name}">${item.name} • eq ${item.eqWeight}</option>`).join('')}
+    ${remoteMaterials.map((item) => `<option value="${item.name}" data-eq="${item.eqWeight}" data-name="${item.name}">${item.name} • eq ${item.eqWeight}</option>`).join('')}
   `;
 }
 
@@ -817,8 +849,22 @@ function showRefreshFeedback(message) {
   }, 2500);
 }
 
+function refreshLocalUi(message) {
+  const storedMaterials = readMaterials();
+  materialsState = storedMaterials;
+  if (!materialsState[currentSystem]) {
+    materialsState[currentSystem] = { epoxy: [], amine: [] };
+  }
+  rebuildAllMaterialSelects();
+  renderMaterialsLibrary();
+  populateTemplateSelect();
+  showRefreshFeedback(message);
+}
+
 async function loadRemoteData() {
   if (!supabaseClient) {
+    setDbStatus('Shared database: not connected. You can still use the app locally.', false);
+    refreshLocalUi('Refresh complete locally: add Supabase credentials to sync shared materials.');
     return;
   }
 
@@ -830,11 +876,14 @@ async function loadRemoteData() {
 
     const remoteMaterials = {};
     const seenMaterials = new Set();
+    const activeSystemKey = systemCatalog[currentSystem] ? currentSystem : 'epoxy';
     sharedMaterialsRows = (materialsData || []).map((item) => {
       const type = item.type === 'amine' ? 'amine' : 'epoxy';
-      const system = item.system || 'epoxy';
+      const rawSystem = item.system || 'epoxy';
+      const normalizedSystem = systemCatalog[rawSystem] ? rawSystem : activeSystemKey;
+      const system = normalizedSystem;
       const eqWeight = Number(item.eq_weight ?? item.eqWeight ?? 0);
-      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: systemCatalog[system]?.label || system };
+      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: systemCatalog[system]?.label || systemCatalog[activeSystemKey]?.label || system };
       const key = `${system}:${type}:${normalizedItem.name}:${normalizedItem.eqWeight}`;
       if (!seenMaterials.has(key)) {
         seenMaterials.add(key);
@@ -847,8 +896,8 @@ async function loadRemoteData() {
     });
 
     materialsState = remoteMaterials;
-    if (!materialsState[currentSystem]) {
-      materialsState[currentSystem] = { epoxy: [], amine: [] };
+    if (!materialsState[activeSystemKey]) {
+      materialsState[activeSystemKey] = { epoxy: [], amine: [] };
     }
     syncLocalMaterialsFromRemote(remoteMaterials);
 
@@ -889,10 +938,27 @@ async function loadRemoteData() {
   }
 }
 
+function getRowMaterialType(select) {
+  const row = select.closest('.row');
+  if (!row) {
+    return 'epoxy';
+  }
+
+  const container = row.parentElement;
+  if (container?.id === 'amine-rows') {
+    return 'amine';
+  }
+  if (container?.id === 'epoxy-rows') {
+    return 'epoxy';
+  }
+
+  const nameInput = row.querySelector('.name-input');
+  return (nameInput?.value || '').toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+}
+
 function refreshMaterialSelects() {
   document.querySelectorAll('.material-select').forEach((select) => {
-    const row = select.closest('.row');
-    const type = row.querySelector('.name-input').value.toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+    const type = getRowMaterialType(select);
     const currentValue = select.value;
     const base = createMaterialOptions(type);
     select.innerHTML = base;
@@ -913,8 +979,7 @@ function rebuildAllMaterialSelects() {
       return;
     }
 
-    const nameInput = row.querySelector('.name-input');
-    const type = (nameInput?.value || '').toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+    const type = getRowMaterialType(select);
     const currentValue = select.value;
     const base = createMaterialOptions(type);
     select.innerHTML = base;
@@ -1170,7 +1235,7 @@ function attachEvents() {
     supabaseClient = initSupabaseClient();
     if (!supabaseClient) {
       setDbStatus('Enter a Supabase URL and anon key to connect.', false);
-      showRefreshFeedback('Refresh failed: enter a Supabase URL and anon key.');
+      refreshLocalUi('Refresh complete locally: add Supabase credentials to sync shared materials.');
       return;
     }
     await loadRemoteData();
