@@ -872,6 +872,7 @@ async function loadRemoteData() {
     subscribeToMaterialsChanges();
     scheduleRemoteRefresh();
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
+    showRefreshFeedback(`Refresh complete: ${sharedMaterialsRows.length} shared material${sharedMaterialsRows.length === 1 ? '' : 's'} loaded.`);
     window.dispatchEvent(new CustomEvent('supabase-data-refreshed'));
   } catch (error) {
     const message = error?.message || 'Unknown Supabase error';
@@ -884,6 +885,7 @@ async function loadRemoteData() {
       : message;
     const fullReason = [reason, status ? `Status: ${status}` : '', details ? `Details: ${details}` : '', hint ? `Hint: ${hint}` : ''].filter(Boolean).join(' | ');
     setDbStatus(`Supabase connection failed: ${fullReason}`, false);
+    showRefreshFeedback('Refresh failed. Check the Supabase URL, key, table names, and permissions.');
   }
 }
 
@@ -1168,10 +1170,10 @@ function attachEvents() {
     supabaseClient = initSupabaseClient();
     if (!supabaseClient) {
       setDbStatus('Enter a Supabase URL and anon key to connect.', false);
+      showRefreshFeedback('Refresh failed: enter a Supabase URL and anon key.');
       return;
     }
     await loadRemoteData();
-    showRefreshFeedback('Refresh complete: dropdowns and shared materials are up to date.');
   });
 
   templateSelect.addEventListener('change', (event) => {
