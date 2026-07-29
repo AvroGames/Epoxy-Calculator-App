@@ -90,6 +90,25 @@ const STORAGE_KEY = 'epoxy-formulator-templates';
 const MATERIALS_KEY = 'epoxy-formulator-materials';
 const DB_CONFIG_KEY = 'epoxy-formulator-db-config';
 
+function getDefaultGitHubRepository() {
+  if (typeof window === 'undefined') {
+    return 'your-github-username/your-repo-name';
+  }
+
+  const hostname = window.location.hostname || '';
+  const path = window.location.pathname || '/';
+  const segments = path.split('/').filter(Boolean);
+
+  if (hostname.endsWith('.github.io') && segments[0]) {
+    const owner = hostname.replace('.github.io', '');
+    return `${owner}/${segments[0]}`;
+  }
+
+  return 'your-github-username/your-repo-name';
+}
+
+const GITHUB_REPOSITORY = getDefaultGitHubRepository();
+
 let supabaseClient = null;
 let materialsState = {};
 let templatesState = [];
@@ -709,6 +728,34 @@ function normalizeSupabaseUrl(rawUrl) {
   return `https://${value.replace(/^\/+/, '').replace(/\/$/, '')}.supabase.co`;
 }
 
+async function loadBuildVersion() {
+  const badge = document.getElementById('build-badge');
+  if (!badge) {
+    return;
+  }
+
+  if (!GITHUB_REPOSITORY || GITHUB_REPOSITORY.includes('your-github-username')) {
+    badge.textContent = 'Build: set repo';
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/commits?per_page=1`, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const sha = data?.[0]?.sha?.slice(0, 7) || 'unknown';
+    badge.textContent = `Build: ${sha}`;
+  } catch (error) {
+    badge.textContent = 'Build: unavailable';
+  }
+}
+
 function initSupabaseClient() {
   const config = getDbConfig();
   const rawUrl = config.url || supabaseUrlInput.value.trim();
@@ -1129,6 +1176,7 @@ function attachEvents() {
 
 attachEvents();
 setActiveSystemUI();
+loadBuildVersion();
 document.querySelectorAll('.tab-button').forEach((button) => {
   button.addEventListener('click', () => switchSystem(button.dataset.system));
 });
