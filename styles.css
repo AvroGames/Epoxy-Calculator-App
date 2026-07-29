@@ -119,6 +119,18 @@ body {
   color: #9eb7ce;
 }
 
+.materials-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 16px;
+}
+
+.material-type-filter.active {
+  background: linear-gradient(135deg, #2f8ef4 0%, #2063c3 100%);
+  color: #fff;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.28em;

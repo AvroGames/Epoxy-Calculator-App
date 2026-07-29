@@ -11,8 +11,8 @@ const supabaseKeyInput = document.getElementById('supabase-key');
 
 const systemCatalog = {
   epoxy: {
-    label: 'Epoxy',
-    description: 'Build epoxy and amine formulations for protective coating systems.',
+    label: 'Resin',
+    description: 'Build resin and curative formulations for protective coating systems.',
     resinLabel: 'Resin blend',
     curativeLabel: 'Curative blend',
     materials: {
@@ -299,16 +299,24 @@ function createMaterialOptions(type) {
 
 function renderMaterialsLibrary() {
   const library = document.getElementById('materials-library');
-  const rows = sharedMaterialsRows.length
-    ? sharedMaterialsRows.map((item) => `
+  const filter = document.querySelector('.material-type-filter.active')?.dataset.materialFilter || 'all';
+  const filteredRows = sharedMaterialsRows.filter((item) => {
+    if (filter === 'all') {
+      return true;
+    }
+    return filter === 'curative' ? item.type === 'amine' : item.type === 'epoxy';
+  });
+
+  const rows = filteredRows.length
+    ? filteredRows.map((item) => `
         <tr>
           <td>${item.name}</td>
-          <td>${item.type === 'amine' ? 'Curative / hardener' : 'Epoxy / resin'}</td>
-          <td>${item.systemLabel}</td>
+          <td>${item.type === 'amine' ? 'Curative' : 'Resin'}</td>
+          <td>${item.systemLabel || item.system || 'epoxy'}</td>
           <td>${item.eqWeight}</td>
         </tr>
       `).join('')
-    : '<tr><td colspan="4">No materials have been saved to the database yet.</td></tr>';
+    : '<tr><td colspan="4">No materials match the selected filter.</td></tr>';
 
   library.innerHTML = `
     <div class="shared-materials-table-shell">
@@ -876,14 +884,12 @@ async function loadRemoteData() {
 
     const remoteMaterials = {};
     const seenMaterials = new Set();
-    const activeSystemKey = systemCatalog[currentSystem] ? currentSystem : 'epoxy';
+    const activeSystemKey = 'epoxy';
     sharedMaterialsRows = (materialsData || []).map((item) => {
       const type = item.type === 'amine' ? 'amine' : 'epoxy';
-      const rawSystem = item.system || 'epoxy';
-      const normalizedSystem = systemCatalog[rawSystem] ? rawSystem : activeSystemKey;
-      const system = normalizedSystem;
+      const system = 'epoxy';
       const eqWeight = Number(item.eq_weight ?? item.eqWeight ?? 0);
-      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: systemCatalog[system]?.label || systemCatalog[activeSystemKey]?.label || system };
+      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: 'Epoxy' };
       const key = `${system}:${type}:${normalizedItem.name}:${normalizedItem.eqWeight}`;
       if (!seenMaterials.has(key)) {
         seenMaterials.add(key);
@@ -1104,11 +1110,26 @@ async function saveCurrentTemplate() {
 }
 
 async function saveCurrentMaterial() {
-  const materialType = window.prompt('Save as epoxy or amine?', 'epoxy');
-  const normalizedType = (materialType || '').trim().toLowerCase();
-  const allowedTypes = ['epoxy', 'amine'];
-  if (!allowedTypes.includes(normalizedType)) {
-    window.alert('Please enter epoxy or amine.');
+  const category = window.prompt('What is the category?', 'resin');
+  const normalizedCategory = (category || '').trim().toLowerCase();
+  const allowedCategories = ['resin', 'curative'];
+  if (!allowedCategories.includes(normalizedCategory)) {
+    window.alert('Please enter resin or curative.');
+    return;
+  }
+
+  const system = window.prompt('What is the system?', 'epoxy');
+  const normalizedSystem = (system || '').trim().toLowerCase();
+  const allowedSystems = ['epoxy', 'polyurethane', 'polyaspartic', 'acrylic'];
+  if (!allowedSystems.includes(normalizedSystem)) {
+    window.alert('Please enter epoxy, polyurethane, polyaspartic, or acrylic.');
+    return;
+  }
+
+  const chemistry = window.prompt('Describe the chemistry', 'e.g. aromatic amine, cycloaliphatic epoxy');
+  const normalizedChemistry = (chemistry || '').trim();
+  if (!normalizedChemistry) {
+    window.alert('Please provide a chemistry description.');
     return;
   }
 
@@ -1123,19 +1144,30 @@ async function saveCurrentMaterial() {
     return;
   }
 
-  const systemMaterials = getSystemMaterials(currentSystem);
-  const existing = systemMaterials[normalizedType] || [];
-  existing.push({ name: name.trim(), eqWeight });
-  systemMaterials[normalizedType] = existing;
-  saveSystemMaterials(currentSystem, systemMaterials);
+  const systemMaterials = getSystemMaterials(normalizedSystem);
+  const storageType = normalizedCategory === 'curative' ? 'amine' : 'epoxy';
+  const existing = systemMaterials[storageType] || [];
+  existing.push({ name: `${name.trim()} — ${normalizedChemistry}`, eqWeight });
+  systemMaterials[storageType] = existing;
+  saveSystemMaterials(normalizedSystem, systemMaterials);
+
+  const storedRow = {
+    id: `${normalizedSystem}-${Date.now()}`,
+    name: `${name.trim()} — ${normalizedChemistry}`,
+    type: storageType,
+    eqWeight,
+    system: normalizedSystem,
+    systemLabel: normalizedSystem,
+  };
+  sharedMaterialsRows = [storedRow, ...sharedMaterialsRows];
 
   if (supabaseClient) {
     try {
       await saveMaterialToSupabase({
         name: name.trim(),
-        normalizedType,
+        normalizedType: storageType,
         eqWeight,
-        systemKey: currentSystem,
+        systemKey: normalizedSystem,
       });
       await loadRemoteData();
     } catch (error) {
@@ -1151,11 +1183,11 @@ async function saveCurrentMaterial() {
     }
   }
 
-  materialsState[currentSystem] = systemMaterials;
+  materialsState[normalizedSystem] = systemMaterials;
   syncLocalMaterialsFromRemote(materialsState);
   rebuildAllMaterialSelects();
   renderMaterialsLibrary();
-  window.alert(`Saved ${name.trim()} to the shared ${normalizedType} list.`);
+  window.alert(`Saved ${name.trim()} to the shared ${normalizedCategory} list under ${normalizedSystem}.`);
 }
 
 function buildTemplatePayload() {
@@ -1213,6 +1245,13 @@ function attachEvents() {
   document.getElementById('save-material').addEventListener('click', saveCurrentMaterial);
   document.getElementById('export-csv').addEventListener('click', exportCsv);
   document.getElementById('export-pdf').addEventListener('click', () => window.print());
+  document.querySelectorAll('.material-type-filter').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.material-type-filter').forEach((filterButton) => filterButton.classList.remove('active'));
+      button.classList.add('active');
+      renderMaterialsLibrary();
+    });
+  });
   document.getElementById('connect-db').addEventListener('click', async () => {
     const config = {
       url: supabaseUrlInput.value.trim(),

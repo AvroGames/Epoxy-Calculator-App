@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Epoxy Coating Formulator</title>
+    <title>Resin Formulator</title>
     <link rel="stylesheet" href="styles.css?v=20260729-2" />
   </head>
   <body>
@@ -16,15 +16,15 @@
             <div id="build-badge" class="build-badge">Checking version…</div>
           </div>
           <p id="app-description">
-            Move between epoxy, polyurethane, polyaspartic, and acrylic workflows,
-            define dilution ratios for epoxy and curative components, add performance additives,
+            Move between resin systems and equivalent-weight chemistries,
+            define dilution ratios for resin and curative components, add performance additives,
             and calculate the resulting formulation in grams.
           </p>
         </div>
       </header>
 
       <div class="tab-bar" id="system-tabs">
-        <button type="button" class="tab-button active" data-system="epoxy">Epoxy</button>
+        <button type="button" class="tab-button active" data-system="epoxy">Resin</button>
         <button type="button" class="tab-button" data-system="materials">Materials</button>
       </div>
 
@@ -32,7 +32,12 @@
         <section id="materials-view" class="card materials-view hidden">
           <div class="card-header">
             <h2>Saved materials library</h2>
-            <p class="materials-subtitle">Browse saved materials by coating family and see their equivalent weights.</p>
+            <p class="materials-subtitle">Browse saved materials by chemistry class and see their equivalent weights.</p>
+          </div>
+          <div class="materials-filter-bar">
+            <button type="button" class="secondary material-type-filter active" data-material-filter="all">All</button>
+            <button type="button" class="secondary material-type-filter" data-material-filter="resin">Resin</button>
+            <button type="button" class="secondary material-type-filter" data-material-filter="curative">Curative</button>
           </div>
           <div id="materials-library" class="materials-library"></div>
         </section>
@@ -81,19 +86,19 @@
             </div>
 
             <div class="section-toolbar">
-              <h3 id="resin-heading">Resin dilution</h3>
+              <h3 id="resin-heading">Resin blend</h3>
               <button type="button" class="secondary" id="add-epoxy">Add resin row</button>
             </div>
             <div class="column-labels epoxy-labels">
               <span>Material</span>
               <span>Name</span>
               <span>Eq. wt.</span>
-              <span>% of epoxy A</span>
+              <span>% of resin A</span>
             </div>
             <div id="epoxy-rows"></div>
 
             <div class="section-toolbar">
-              <h3 id="curative-heading">Curative dilution</h3>
+              <h3 id="curative-heading">Curative blend</h3>
               <button type="button" class="secondary" id="add-amine">Add curative row</button>
             </div>
             <div class="column-labels amine-labels">
