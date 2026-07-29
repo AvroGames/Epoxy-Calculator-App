@@ -96,6 +96,7 @@ let templatesState = [];
 let dbConnected = false;
 let currentSystem = 'epoxy';
 let uiState = {};
+let remoteRefreshTimer = null;
 
 function readMaterials() {
   try {
@@ -152,6 +153,30 @@ function setDbStatus(message, connected = false) {
   dbConnected = connected;
   dbStatus.textContent = message;
   dbStatus.style.color = connected ? '#9be3ae' : '#9eb7ce';
+  if (!connected) {
+    if (remoteRefreshTimer) {
+      clearInterval(remoteRefreshTimer);
+      remoteRefreshTimer = null;
+    }
+  }
+}
+
+function stopRemoteRefreshTimer() {
+  if (remoteRefreshTimer) {
+    clearInterval(remoteRefreshTimer);
+    remoteRefreshTimer = null;
+  }
+}
+
+function scheduleRemoteRefresh() {
+  stopRemoteRefreshTimer();
+  if (!supabaseClient || !dbConnected) {
+    return;
+  }
+
+  remoteRefreshTimer = window.setInterval(() => {
+    loadRemoteData();
+  }, 5000);
 }
 
 function createMaterialOptions(type) {
@@ -696,6 +721,8 @@ async function loadRemoteData() {
 
     populateTemplateSelect();
     refreshMaterialSelects();
+    renderMaterialsLibrary();
+    scheduleRemoteRefresh();
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
   } catch (error) {
     setDbStatus('Supabase connection failed. Make sure the URL/key are valid and the tables exist.', false);
@@ -848,6 +875,7 @@ async function saveCurrentMaterial() {
 
   materialsState[currentSystem] = systemMaterials;
   refreshMaterialSelects();
+  renderMaterialsLibrary();
   window.alert(`Saved ${name.trim()} to your ${normalizedType} list.`);
 }
 
