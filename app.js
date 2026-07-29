@@ -247,14 +247,11 @@ function subscribeToMaterialsChanges() {
 }
 
 function createMaterialOptions(type) {
-  const config = getSystemConfig();
-  const database = config.materials[type] || [];
-  const customMaterials = getSystemMaterials(currentSystem)[type] || [];
   const remoteMaterials = materialsState[currentSystem]?.[type] || [];
   const seen = new Set();
   const items = [];
 
-  [...database, ...customMaterials, ...remoteMaterials].forEach((item) => {
+  remoteMaterials.forEach((item) => {
     const key = `${item.name}-${item.eqWeight}`;
     if (!seen.has(key)) {
       seen.add(key);
