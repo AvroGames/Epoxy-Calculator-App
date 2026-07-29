@@ -889,13 +889,25 @@ function refreshMaterialSelects() {
 }
 
 function rebuildAllMaterialSelects() {
-  refreshMaterialSelects();
   const selects = document.querySelectorAll('.material-select');
   selects.forEach((select) => {
     const row = select.closest('.row');
-    const type = row.querySelector('.name-input').value.toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+    if (!row) {
+      return;
+    }
+
+    const nameInput = row.querySelector('.name-input');
+    const type = (nameInput?.value || '').toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+    const currentValue = select.value;
     const base = createMaterialOptions(type);
     select.innerHTML = base;
+
+    if (currentValue) {
+      const match = Array.from(select.options).find((option) => option.value === currentValue);
+      if (match) {
+        select.value = currentValue;
+      }
+    }
   });
 }
 
@@ -1211,3 +1223,4 @@ if (supabaseClient) {
 populateTemplateSelect();
 renderMaterialsLibrary();
 resetForm();
+rebuildAllMaterialSelects();
