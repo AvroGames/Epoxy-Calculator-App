@@ -803,6 +803,20 @@ function setDbStatus(message, connected = false) {
   dbStatus.style.color = connected ? '#9be3ae' : '#9eb7ce';
 }
 
+function showRefreshFeedback(message) {
+  const feedback = document.getElementById('refresh-feedback');
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = message;
+  feedback.classList.add('visible');
+  window.clearTimeout(showRefreshFeedback.timer);
+  showRefreshFeedback.timer = window.setTimeout(() => {
+    feedback.classList.remove('visible');
+  }, 2500);
+}
+
 async function loadRemoteData() {
   if (!supabaseClient) {
     return;
@@ -858,6 +872,7 @@ async function loadRemoteData() {
     subscribeToMaterialsChanges();
     scheduleRemoteRefresh();
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
+    window.dispatchEvent(new CustomEvent('supabase-data-refreshed'));
   } catch (error) {
     const message = error?.message || 'Unknown Supabase error';
     const details = error?.details || '';
@@ -1156,6 +1171,7 @@ function attachEvents() {
       return;
     }
     await loadRemoteData();
+    showRefreshFeedback('Refresh complete: dropdowns and shared materials are up to date.');
   });
 
   templateSelect.addEventListener('change', (event) => {
@@ -1208,6 +1224,10 @@ function attachEvents() {
 attachEvents();
 setActiveSystemUI();
 loadBuildVersion();
+window.addEventListener('supabase-data-refreshed', () => {
+  rebuildAllMaterialSelects();
+  showRefreshFeedback('Shared materials refreshed.');
+});
 document.querySelectorAll('.tab-button').forEach((button) => {
   button.addEventListener('click', () => switchSystem(button.dataset.system));
 });

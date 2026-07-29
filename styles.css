@@ -266,6 +266,19 @@ h1 {
   font-size: 0.95rem;
 }
 
+.refresh-feedback {
+  margin-top: 8px;
+  min-height: 1.2em;
+  color: #9be3ae;
+  font-size: 0.92rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.refresh-feedback.visible {
+  opacity: 1;
+}
+
 label {
   font-size: 0.92rem;
   color: #8ca7c5;
