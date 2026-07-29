@@ -778,7 +778,9 @@ async function loadRemoteData() {
     scheduleRemoteRefresh();
     setDbStatus('Connected to Supabase. Shared materials and templates are ready.', true);
   } catch (error) {
-    setDbStatus('Supabase connection failed. Make sure the URL/key are valid and the tables exist.', false);
+    const message = error?.message || 'Unknown Supabase error';
+    console.error('Supabase load failed', error);
+    setDbStatus(`Supabase connection failed: ${message}`, false);
   }
 }
 
