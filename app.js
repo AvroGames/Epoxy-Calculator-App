@@ -260,7 +260,7 @@ function createMaterialOptions(type) {
   });
 
   return `
-    <option value="">Custom</option>
+    <option value="">custom</option>
     ${items.map((item) => `<option value="${item.name}" data-eq="${item.eqWeight}" data-name="${item.name}">${item.name} • eq ${item.eqWeight}</option>`).join('')}
   `;
 }
@@ -421,6 +421,9 @@ function createRowMarkup(type, data = {}) {
 function addRow(type, data = {}) {
   const target = type === 'epoxy' ? epoxyContainer : type === 'amine' ? amineContainer : additiveContainer;
   target.insertAdjacentHTML('beforeend', createRowMarkup(type, data));
+  if (type === 'epoxy' || type === 'amine') {
+    refreshMaterialSelects();
+  }
 }
 
 function clearRows(container) {
@@ -850,7 +853,7 @@ async function loadRemoteData() {
     }
 
     populateTemplateSelect();
-    refreshMaterialSelects();
+    rebuildAllMaterialSelects();
     renderMaterialsLibrary();
     subscribeToMaterialsChanges();
     scheduleRemoteRefresh();
@@ -882,6 +885,17 @@ function refreshMaterialSelects() {
         select.value = currentValue;
       }
     }
+  });
+}
+
+function rebuildAllMaterialSelects() {
+  refreshMaterialSelects();
+  const selects = document.querySelectorAll('.material-select');
+  selects.forEach((select) => {
+    const row = select.closest('.row');
+    const type = row.querySelector('.name-input').value.toLowerCase().includes('amine') ? 'amine' : 'epoxy';
+    const base = createMaterialOptions(type);
+    select.innerHTML = base;
   });
 }
 
@@ -1045,7 +1059,7 @@ async function saveCurrentMaterial() {
 
   materialsState[currentSystem] = systemMaterials;
   syncLocalMaterialsFromRemote(materialsState);
-  refreshMaterialSelects();
+  rebuildAllMaterialSelects();
   renderMaterialsLibrary();
   window.alert(`Saved ${name.trim()} to the shared ${normalizedType} list.`);
 }
