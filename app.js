@@ -320,13 +320,17 @@ function createRowMarkup(type, data = {}) {
     `;
   }
 
+  const container = type === 'epoxy' ? epoxyContainer : amineContainer;
+  const isFirstRow = container.querySelectorAll('.row').length === 0;
+  const placeholder = type === 'epoxy' ? '% of epoxy A' : '% of curative A';
+
   return `
     <div class="row">
       <div class="row-fields">
         <select class="material-select">${createMaterialOptions(type)}</select>
         <input class="name-input" type="text" placeholder="Component name" value="${data.name || ''}" />
         <input class="eq-weight-input" type="number" min="0" step="0.01" placeholder="Eq. weight" value="${data.eqWeight || ''}" />
-        <input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="% of blend" value="${data.percentage || ''}" />
+        ${isFirstRow ? '' : `<input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="${placeholder}" value="${data.percentage || ''}" />`}
       </div>
       <button class="icon-button remove-row" type="button">Remove</button>
     </div>
@@ -343,9 +347,10 @@ function clearRows(container) {
 }
 
 function collectRows(container, type) {
-  return Array.from(container.querySelectorAll('.row')).map((row) => {
+  return Array.from(container.querySelectorAll('.row')).map((row, index) => {
     const name = row.querySelector('.name-input').value.trim();
-    const percentage = parseFloat(row.querySelector('.percentage-input').value);
+    const percentageInput = row.querySelector('.percentage-input');
+    const percentage = parseFloat(percentageInput ? percentageInput.value : index === 0 ? 100 : 0);
 
     if (type === 'additive') {
       const additiveType = row.querySelector('.additive-type').value;
@@ -378,6 +383,43 @@ function normalizeBlendRatios(rows) {
       displayPercentage: percentage,
     };
   });
+}
+
+function calculateBlendEquivalentWeight(rows) {
+  if (!rows.length) {
+    return 0;
+  }
+
+  const normalizedRows = normalizeBlendRatios(rows);
+  const primaryRow = normalizedRows[0];
+  const primaryEq = Number.isFinite(primaryRow?.eqWeight) ? primaryRow.eqWeight : 0;
+
+  if (primaryEq <= 0) {
+    return 0;
+  }
+
+  const dilutionSum = normalizedRows.slice(1).reduce((sum, row) => {
+    const percent = Number.isFinite(row.displayPercentage) ? row.displayPercentage : 0;
+    return sum + percent / 100;
+  }, 0);
+
+  const denominator = normalizedRows.reduce((sum, row, index) => {
+    const rowEq = Number.isFinite(row.eqWeight) ? row.eqWeight : 0;
+    if (rowEq <= 0) {
+      return sum;
+    }
+
+    if (index === 0) {
+      return sum + (1 / rowEq);
+    }
+
+    const percent = Number.isFinite(row.displayPercentage) ? row.displayPercentage : 0;
+    const share = percent / 100;
+    return sum + (share / rowEq);
+  }, 0);
+
+  const totalMassFactor = 1 + dilutionSum;
+  return totalMassFactor / denominator;
 }
 
 function enforceBlendTotal(container) {
@@ -417,17 +459,36 @@ function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass
 }
 
 function buildBlendRows(rows, blendMass) {
-  const totalPercent = rows.reduce((sum, row) => sum + (Number.isFinite(row.percentage) ? row.percentage : 0), 0);
+  if (!rows.length) {
+    return [];
+  }
 
-  return rows.map((row) => {
-    const percentage = Number.isFinite(row.percentage) ? row.percentage : 0;
-    const share = totalPercent > 0 ? percentage / totalPercent : 0;
-    return {
+  const normalizedRows = rows.map((row, index) => ({
+    ...row,
+    percentageValue: Number.isFinite(row.displayPercentage)
+      ? row.displayPercentage
+      : Number.isFinite(row.percentage)
+        ? row.percentage * 100
+        : 0,
+    isPrimary: index === 0,
+  }));
+
+  if (normalizedRows.length === 1) {
+    return normalizedRows.map((row) => ({
       ...row,
-      mass: blendMass * share,
-      displayPercentage: row.displayPercentage,
-    };
-  });
+      mass: blendMass,
+      displayPercentage: row.percentageValue,
+    }));
+  }
+
+  const dilutionSum = normalizedRows.slice(1).reduce((sum, row) => sum + (row.percentageValue / 100), 0);
+  const primaryMass = dilutionSum > 0 ? blendMass / (1 + dilutionSum) : blendMass;
+
+  return normalizedRows.map((row) => ({
+    ...row,
+    mass: row.isPrimary ? primaryMass : primaryMass * (row.percentageValue / 100),
+    displayPercentage: row.percentageValue,
+  }));
 }
 
 function buildResults(epoxyRows, amineRows, additives, epoxyBlendMass, amineBlendMass) {
@@ -520,8 +581,8 @@ function calculateFormulation() {
   const normalizedEpoxy = normalizeBlendRatios(epoxyRows);
   const normalizedAmine = normalizeBlendRatios(amineRows);
 
-  const epoxyBlendEq = 1 / normalizedEpoxy.reduce((sum, row) => sum + (row.percentage / row.eqWeight), 0);
-  const amineBlendEq = 1 / normalizedAmine.reduce((sum, row) => sum + (row.percentage / row.eqWeight), 0);
+  const epoxyBlendEq = calculateBlendEquivalentWeight(epoxyRows);
+  const amineBlendEq = calculateBlendEquivalentWeight(amineRows);
 
   if (!Number.isFinite(epoxyBlendEq) || !Number.isFinite(amineBlendEq) || epoxyBlendEq <= 0 || amineBlendEq <= 0) {
     summary.innerHTML = '<div class="warning">Equivalent weights and percentages must be valid for the calculation to work.</div>';
@@ -538,9 +599,19 @@ function calculateFormulation() {
     warnings.push('Additive percentages exceed 100% of the total formulation.');
   }
 
-  const amineToEpoxyRatio = amineBlendEq / epoxyBlendEq;
-  const epoxyBlendMass = remainingWeight / (1 + amineToEpoxyRatio);
-  const amineBlendMass = epoxyBlendMass * amineToEpoxyRatio;
+  const equalEqWeights = Math.abs(epoxyBlendEq - amineBlendEq) <= 0.01;
+  let epoxyBlendMass;
+  let amineBlendMass;
+
+  if (equalEqWeights) {
+    const sharedMass = remainingWeight / 2;
+    epoxyBlendMass = sharedMass;
+    amineBlendMass = sharedMass;
+  } else {
+    const amineToEpoxyRatio = amineBlendEq / epoxyBlendEq;
+    epoxyBlendMass = remainingWeight / (1 + amineToEpoxyRatio);
+    amineBlendMass = epoxyBlendMass * amineToEpoxyRatio;
+  }
 
   const epoxyResultRows = buildBlendRows(normalizedEpoxy, epoxyBlendMass);
   const amineResultRows = buildBlendRows(normalizedAmine, amineBlendMass);
