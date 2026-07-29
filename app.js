@@ -370,35 +370,18 @@ function normalizeBlendRatios(rows) {
     return [];
   }
 
-  return rows.map((row) => ({
-    ...row,
-    percentage: Number.isFinite(parseFloat(row.percentage)) ? parseFloat(row.percentage) / 100 : 0,
-  }));
+  return rows.map((row) => {
+    const percentage = Number.isFinite(parseFloat(row.percentage)) ? parseFloat(row.percentage) : 0;
+    return {
+      ...row,
+      percentage: percentage / 100,
+      displayPercentage: percentage,
+    };
+  });
 }
 
 function enforceBlendTotal(container) {
-  const rows = Array.from(container.querySelectorAll('.row'));
-  if (rows.length < 2) {
-    return;
-  }
-
-  const values = rows.map((row) => {
-    const value = parseFloat(row.querySelector('.percentage-input').value);
-    return Number.isFinite(value) && value >= 0 ? value : 0;
-  });
-
-  const total = values.reduce((sum, value) => sum + value, 0);
-  const lastIndex = rows.length - 1;
-  const lastInput = rows[lastIndex].querySelector('.percentage-input');
-  const previousTotal = values.slice(0, -1).reduce((sum, value) => sum + value, 0);
-
-  if (total > 0 && total < 100 && values[lastIndex] === 0) {
-    const remaining = Math.max(0, 100 - previousTotal);
-    lastInput.value = remaining.toFixed(2);
-  } else if (total > 0 && total < 100) {
-    const remaining = Math.max(0, 100 - previousTotal);
-    lastInput.value = remaining.toFixed(2);
-  }
+  return;
 }
 
 function formatNumber(value) {
@@ -433,18 +416,40 @@ function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass
   `;
 }
 
-function buildResults(epoxyRows, amineRows, additives) {
-  const epoxyCards = epoxyRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of blend)</li>`).join('');
-  const amineCards = amineRows.map((row) => `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of blend)</li>`).join('');
+function buildBlendRows(rows, blendMass) {
+  const totalPercent = rows.reduce((sum, row) => sum + (Number.isFinite(row.percentage) ? row.percentage : 0), 0);
+
+  return rows.map((row) => {
+    const percentage = Number.isFinite(row.percentage) ? row.percentage : 0;
+    const share = totalPercent > 0 ? percentage / totalPercent : 0;
+    return {
+      ...row,
+      mass: blendMass * share,
+      displayPercentage: row.displayPercentage,
+    };
+  });
+}
+
+function buildResults(epoxyRows, amineRows, additives, epoxyBlendMass, amineBlendMass) {
+  const epoxyCards = epoxyRows.map((row) => {
+    const displayPercentage = Number.isFinite(row.displayPercentage) ? row.displayPercentage : row.percentage * 100;
+    return `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
+  }).join('');
+
+  const amineCards = amineRows.map((row) => {
+    const displayPercentage = Number.isFinite(row.displayPercentage) ? row.displayPercentage : row.percentage * 100;
+    return `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
+  }).join('');
+
   const additiveCards = additives.map((row) => `<li>${row.type}: ${row.name} — ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
 
   return `
     <div class="result-card">
-      <h3>Epoxy blend</h3>
+      <h3>Epoxy blend (${formatNumber(epoxyBlendMass)} g)</h3>
       <ul>${epoxyCards || '<li>No epoxy rows entered.</li>'}</ul>
     </div>
     <div class="result-card">
-      <h3>Amine blend</h3>
+      <h3>Amine blend (${formatNumber(amineBlendMass)} g)</h3>
       <ul>${amineCards || '<li>No amine rows entered.</li>'}</ul>
     </div>
     <div class="result-card">
@@ -505,17 +510,6 @@ function calculateFormulation() {
     return;
   }
 
-  const epoxyPercentTotal = epoxyRows.reduce((sum, row) => sum + row.percentage, 0);
-  const aminePercentTotal = amineRows.reduce((sum, row) => sum + row.percentage, 0);
-
-  if (epoxyRows.length >= 2 && Math.abs(epoxyPercentTotal - 100) > 0.01) {
-    warnings.push(`Epoxy blend percentages must add to 100% (currently ${formatNumber(epoxyPercentTotal)}%).`);
-  }
-
-  if (amineRows.length >= 2 && Math.abs(aminePercentTotal - 100) > 0.01) {
-    warnings.push(`Amine blend percentages must add to 100% (currently ${formatNumber(aminePercentTotal)}%).`);
-  }
-
   if (warnings.length) {
     summary.innerHTML = `<div class="warning">${warnings.join(' ')}</div>`;
     resultsList.innerHTML = '';
@@ -548,13 +542,13 @@ function calculateFormulation() {
   const epoxyBlendMass = remainingWeight / (1 + amineToEpoxyRatio);
   const amineBlendMass = epoxyBlendMass * amineToEpoxyRatio;
 
-  const epoxyResultRows = normalizedEpoxy.map((row) => ({ ...row, mass: epoxyBlendMass * row.percentage }));
-  const amineResultRows = normalizedAmine.map((row) => ({ ...row, mass: amineBlendMass * row.percentage }));
+  const epoxyResultRows = buildBlendRows(normalizedEpoxy, epoxyBlendMass);
+  const amineResultRows = buildBlendRows(normalizedAmine, amineBlendMass);
   const additiveResultRows = additiveRows.map((row) => ({ ...row, mass: (totalWeight * row.percentage) / 100 }));
 
   const balance = getBalanceState(epoxyBlendEq, amineBlendEq);
   summary.innerHTML = buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass, totalWeight, additiveMass, warnings, balance);
-  resultsList.innerHTML = buildResults(epoxyResultRows, amineResultRows, additiveResultRows);
+  resultsList.innerHTML = buildResults(epoxyResultRows, amineResultRows, additiveResultRows, epoxyBlendMass, amineBlendMass);
   renderFormulaGrams(epoxyResultRows, amineResultRows, additiveResultRows);
 }
 

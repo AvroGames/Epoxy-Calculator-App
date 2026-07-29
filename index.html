@@ -14,8 +14,8 @@
           <h1 id="app-title">Build and balance coating formulations</h1>
           <p id="app-description">
             Move between epoxy, polyurethane, polyaspartic, and acrylic workflows,
-            define reactive blend percentages, add performance additives, and calculate
-            the resulting formulation in grams.
+            define dilution ratios for epoxy and curative components, add performance additives,
+            and calculate the resulting formulation in grams.
           </p>
         </div>
       </header>
@@ -80,26 +80,26 @@
             </div>
 
             <div class="section-toolbar">
-              <h3 id="resin-heading">Resin blend</h3>
+              <h3 id="resin-heading">Resin dilution</h3>
               <button type="button" class="secondary" id="add-epoxy">Add resin row</button>
             </div>
             <div class="column-labels epoxy-labels">
               <span>Material</span>
               <span>Name</span>
               <span>Eq. wt.</span>
-              <span>% of blend</span>
+              <span>% of epoxy A</span>
             </div>
             <div id="epoxy-rows"></div>
 
             <div class="section-toolbar">
-              <h3 id="curative-heading">Curative blend</h3>
+              <h3 id="curative-heading">Curative dilution</h3>
               <button type="button" class="secondary" id="add-amine">Add curative row</button>
             </div>
             <div class="column-labels amine-labels">
               <span>Material</span>
               <span>Name</span>
               <span>Eq. wt.</span>
-              <span>% of blend</span>
+              <span>% of curative A</span>
             </div>
             <div id="amine-rows"></div>
 
@@ -129,7 +129,7 @@
 
         <section class="card formula-box">
           <h2>Formula in grams</h2>
-          <p class="formula-subtitle">A gram-based breakdown for the current formulation based on the total weight entered above.</p>
+          <p class="formula-subtitle">A gram-based breakdown for the current formulation based on the total weight entered above and the dilution ratios you defined.</p>
           <div id="formula-grams" class="formula-grams"></div>
         </section>
       </main>
