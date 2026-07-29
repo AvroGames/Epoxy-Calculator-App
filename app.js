@@ -665,10 +665,20 @@ async function loadRemoteData() {
   try {
     const { data: materialsData, error: materialsError } = await supabaseClient.from('materials').select('*').order('name');
     if (!materialsError) {
-      materialsState[currentSystem] = {
-        epoxy: (materialsData || []).filter((item) => item.type === 'epoxy').map((item) => ({ name: item.name, eqWeight: Number(item.eq_weight) })),
-        amine: (materialsData || []).filter((item) => item.type === 'amine').map((item) => ({ name: item.name, eqWeight: Number(item.eq_weight) })),
-      };
+      const remoteMaterials = (materialsData || []).reduce((accumulator, item) => {
+        const type = item.type === 'amine' ? 'amine' : 'epoxy';
+        const system = item.system || 'epoxy';
+        if (!accumulator[system]) {
+          accumulator[system] = { epoxy: [], amine: [] };
+        }
+        accumulator[system][type].push({ name: item.name, eqWeight: Number(item.eq_weight) });
+        return accumulator;
+      }, {});
+
+      materialsState = remoteMaterials;
+      if (!materialsState[currentSystem]) {
+        materialsState[currentSystem] = { epoxy: [], amine: [] };
+      }
     }
 
     const { data: templatesData, error: templatesError } = await supabaseClient.from('templates').select('*').order('created_at', { ascending: false });
@@ -828,7 +838,9 @@ async function saveCurrentMaterial() {
         type: normalizedType,
         name: name.trim(),
         eq_weight: eqWeight,
+        system: currentSystem,
       });
+      await loadRemoteData();
     } catch (error) {
       console.warn('Material save to Supabase failed', error);
     }
