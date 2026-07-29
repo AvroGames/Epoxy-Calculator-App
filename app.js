@@ -768,6 +768,28 @@ function refreshMaterialSelects() {
   });
 }
 
+async function saveMaterialToSupabase({ name, normalizedType, eqWeight, systemKey }) {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not connected.');
+  }
+
+  const payloadVariants = [
+    { name, type: normalizedType, eq_weight: eqWeight, system: systemKey },
+    { name, type: normalizedType, eqWeight, system: systemKey },
+  ];
+
+  let lastError = null;
+  for (const payload of payloadVariants) {
+    const { data, error } = await supabaseClient.from('materials').insert(payload).select('*');
+    if (!error) {
+      return data;
+    }
+    lastError = error;
+  }
+
+  throw lastError || new Error('Unknown Supabase insert error.');
+}
+
 function readTemplates() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -884,16 +906,23 @@ async function saveCurrentMaterial() {
 
   if (supabaseClient) {
     try {
-      await supabaseClient.from('materials').insert({
-        type: normalizedType,
+      await saveMaterialToSupabase({
         name: name.trim(),
-        eq_weight: eqWeight,
-        system: currentSystem,
+        normalizedType,
+        eqWeight,
+        systemKey: currentSystem,
       });
       await loadRemoteData();
     } catch (error) {
-      console.warn('Material save to Supabase failed', error);
-      setDbStatus('The material was saved locally, but the Supabase insert failed.', false);
+      console.error('Material save to Supabase failed', error);
+      const message = error?.message || 'Unknown error';
+      const guidance = message.includes('relation') || message.includes('does not exist')
+        ? 'Create the public.materials table in Supabase and allow anonymous inserts/reads.'
+        : message.includes('policy') || message.includes('permission') || message.includes('RLS')
+          ? 'Enable Row Level Security policies that permit anonymous SELECT/INSERT on the materials table.'
+          : 'Check the Supabase URL, anon key, and the materials table columns.';
+      setDbStatus(`Supabase write failed: ${message}`, false);
+      window.alert(`The material was saved locally, but the database insert failed.\n\n${guidance}`);
     }
   }
 
