@@ -737,17 +737,25 @@ async function loadBuildVersion() {
   }
 
   try {
-    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/commits?per_page=1`, {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
+    const [releaseResponse, commitResponse] = await Promise.all([
+      fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=1`, {
+        headers: { Accept: 'application/vnd.github+json' },
+      }),
+      fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/commits?per_page=1`, {
+        headers: { Accept: 'application/vnd.github+json' },
+      }),
+    ]);
 
-    if (!response.ok) {
-      throw new Error(`GitHub API returned ${response.status}`);
+    if (!releaseResponse.ok || !commitResponse.ok) {
+      throw new Error('GitHub API request failed');
     }
 
-    const data = await response.json();
-    const sha = data?.[0]?.sha?.slice(0, 7) || 'unknown';
-    badge.textContent = `Build: ${sha}`;
+    const releases = await releaseResponse.json();
+    const commits = await commitResponse.json();
+    const releaseTag = releases?.[0]?.tag_name || '';
+    const sha = commits?.[0]?.sha?.slice(0, 7) || 'unknown';
+
+    badge.textContent = releaseTag ? `Version: ${releaseTag}` : `Build: ${sha}`;
   } catch (error) {
     badge.textContent = 'Build: unavailable';
   }
