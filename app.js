@@ -688,12 +688,38 @@ function calculateFormulation() {
   renderFormulaGrams(epoxyResultRows, amineResultRows, additiveResultRows);
 }
 
+function normalizeSupabaseUrl(rawUrl) {
+  const value = (rawUrl || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value.replace(/\/$/, '');
+  }
+
+  if (value.includes('supabase.co')) {
+    return `https://${value.replace(/^\/+/, '').replace(/\/$/, '')}`;
+  }
+
+  if (value.includes('.')) {
+    return `https://${value.replace(/^\/+/, '').replace(/\/$/, '')}`;
+  }
+
+  return `https://${value.replace(/^\/+/, '').replace(/\/$/, '')}.supabase.co`;
+}
+
 function initSupabaseClient() {
   const config = getDbConfig();
-  const url = config.url || supabaseUrlInput.value.trim();
+  const rawUrl = config.url || supabaseUrlInput.value.trim();
   const key = config.key || supabaseKeyInput.value.trim();
+  const url = normalizeSupabaseUrl(rawUrl);
 
   if (!url || !key) {
+    return null;
+  }
+
+  if (!url.includes('supabase.co') && !url.includes('supabase.in')) {
     return null;
   }
 
@@ -780,7 +806,10 @@ async function loadRemoteData() {
   } catch (error) {
     const message = error?.message || 'Unknown Supabase error';
     console.error('Supabase load failed', error);
-    setDbStatus(`Supabase connection failed: ${message}`, false);
+    const reason = message.includes('Failed to fetch')
+      ? 'The browser could not reach the Supabase API. Check that the URL is the full Project URL from Supabase Settings > API, use the anon key, and that the project is online.'
+      : message;
+    setDbStatus(`Supabase connection failed: ${reason}`, false);
   }
 }
 
