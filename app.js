@@ -9,6 +9,20 @@ const dbStatus = document.getElementById('db-status');
 const supabaseUrlInput = document.getElementById('supabase-url');
 const supabaseKeyInput = document.getElementById('supabase-key');
 
+function getMaterialSaveModalElements() {
+  return {
+    modal: document.getElementById('material-save-modal'),
+    nameInput: document.getElementById('material-save-name'),
+    systemInput: document.getElementById('material-save-system'),
+    categorySelect: document.getElementById('material-save-category'),
+    eqWeightInput: document.getElementById('material-save-eq-weight'),
+    chemistryInput: document.getElementById('material-save-chemistry'),
+    confirmButton: document.getElementById('confirm-material-save'),
+    cancelButton: document.getElementById('cancel-material-save'),
+    closeButton: document.getElementById('close-material-modal'),
+  };
+}
+
 const systemCatalog = {
   epoxy: {
     label: 'Resin',
@@ -884,12 +898,12 @@ async function loadRemoteData() {
 
     const remoteMaterials = {};
     const seenMaterials = new Set();
-    const activeSystemKey = 'epoxy';
     sharedMaterialsRows = (materialsData || []).map((item) => {
       const type = item.type === 'amine' ? 'amine' : 'epoxy';
-      const system = 'epoxy';
+      const system = (item.system || 'epoxy').toString().trim().toLowerCase() || 'epoxy';
+      const systemLabel = (item.systemLabel || item.system || system || 'epoxy').toString();
       const eqWeight = Number(item.eq_weight ?? item.eqWeight ?? 0);
-      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel: 'Epoxy' };
+      const normalizedItem = { id: item.id, name: item.name, type, eqWeight, system, systemLabel };
       const key = `${system}:${type}:${normalizedItem.name}:${normalizedItem.eqWeight}`;
       if (!seenMaterials.has(key)) {
         seenMaterials.add(key);
@@ -902,9 +916,6 @@ async function loadRemoteData() {
     });
 
     materialsState = remoteMaterials;
-    if (!materialsState[activeSystemKey]) {
-      materialsState[activeSystemKey] = { epoxy: [], amine: [] };
-    }
     syncLocalMaterialsFromRemote(remoteMaterials);
 
     const { data: templatesData, error: templatesError } = await supabaseClient.from('templates').select('*').order('name', { ascending: true });
@@ -1109,51 +1120,68 @@ async function saveCurrentTemplate() {
   templateSelect.value = templates.length - 1;
 }
 
+function openMaterialSaveModal() {
+  const elements = getMaterialSaveModalElements();
+  if (!elements.modal) {
+    return;
+  }
+
+  elements.nameInput.value = '';
+  elements.systemInput.value = '';
+  elements.categorySelect.value = 'resin';
+  elements.eqWeightInput.value = '';
+  elements.chemistryInput.value = '';
+  elements.modal.classList.remove('hidden');
+  elements.nameInput.focus();
+}
+
+function closeMaterialSaveModal() {
+  const elements = getMaterialSaveModalElements();
+  elements.modal?.classList.add('hidden');
+}
+
 async function saveCurrentMaterial() {
-  const category = window.prompt('What is the category?', 'resin');
-  const normalizedCategory = (category || '').trim().toLowerCase();
+  const elements = getMaterialSaveModalElements();
+  const name = (elements.nameInput?.value || '').trim();
+  if (!name) {
+    window.alert('Please enter a material name.');
+    return;
+  }
+
+  const system = (elements.systemInput?.value || '').trim();
+  if (!system) {
+    window.alert('Please enter a system name.');
+    return;
+  }
+
+  const normalizedSystem = system.toLowerCase();
+  const normalizedCategory = (elements.categorySelect?.value || 'resin').trim().toLowerCase();
   const allowedCategories = ['resin', 'curative'];
   if (!allowedCategories.includes(normalizedCategory)) {
-    window.alert('Please enter resin or curative.');
+    window.alert('Please select resin or curative.');
     return;
   }
 
-  const system = window.prompt('What is the system?', 'epoxy');
-  const normalizedSystem = (system || '').trim().toLowerCase();
-  const allowedSystems = ['epoxy', 'polyurethane', 'polyaspartic', 'acrylic'];
-  if (!allowedSystems.includes(normalizedSystem)) {
-    window.alert('Please enter epoxy, polyurethane, polyaspartic, or acrylic.');
-    return;
-  }
-
-  const chemistry = window.prompt('Describe the chemistry', 'e.g. aromatic amine, cycloaliphatic epoxy');
-  const normalizedChemistry = (chemistry || '').trim();
-  if (!normalizedChemistry) {
-    window.alert('Please provide a chemistry description.');
-    return;
-  }
-
-  const name = window.prompt('Material name', 'My material');
-  if (!name) {
-    return;
-  }
-
-  const eqWeight = parseFloat(window.prompt('Equivalent weight', '190'));
+  const eqWeight = parseFloat(elements.eqWeightInput?.value);
   if (!Number.isFinite(eqWeight) || eqWeight <= 0) {
     window.alert('Equivalent weight must be a positive number.');
     return;
   }
 
+  const normalizedChemistry = (elements.chemistryInput?.value || '').trim();
+  const chemistrySuffix = normalizedChemistry ? ` — ${normalizedChemistry}` : '';
+  const displayName = `${name}${chemistrySuffix}`;
+
   const systemMaterials = getSystemMaterials(normalizedSystem);
   const storageType = normalizedCategory === 'curative' ? 'amine' : 'epoxy';
   const existing = systemMaterials[storageType] || [];
-  existing.push({ name: `${name.trim()} — ${normalizedChemistry}`, eqWeight });
+  existing.push({ name: displayName, eqWeight });
   systemMaterials[storageType] = existing;
   saveSystemMaterials(normalizedSystem, systemMaterials);
 
   const storedRow = {
     id: `${normalizedSystem}-${Date.now()}`,
-    name: `${name.trim()} — ${normalizedChemistry}`,
+    name: displayName,
     type: storageType,
     eqWeight,
     system: normalizedSystem,
@@ -1164,7 +1192,7 @@ async function saveCurrentMaterial() {
   if (supabaseClient) {
     try {
       await saveMaterialToSupabase({
-        name: name.trim(),
+        name: displayName,
         normalizedType: storageType,
         eqWeight,
         systemKey: normalizedSystem,
@@ -1187,7 +1215,8 @@ async function saveCurrentMaterial() {
   syncLocalMaterialsFromRemote(materialsState);
   rebuildAllMaterialSelects();
   renderMaterialsLibrary();
-  window.alert(`Saved ${name.trim()} to the shared ${normalizedCategory} list under ${normalizedSystem}.`);
+  closeMaterialSaveModal();
+  window.alert(`Saved ${displayName} to the shared ${normalizedCategory} list under ${normalizedSystem}.`);
 }
 
 function buildTemplatePayload() {
@@ -1242,7 +1271,7 @@ function attachEvents() {
   document.getElementById('calculate-btn').addEventListener('click', calculateFormulation);
   document.getElementById('reset-btn').addEventListener('click', resetForm);
   document.getElementById('save-template').addEventListener('click', saveCurrentTemplate);
-  document.getElementById('save-material').addEventListener('click', saveCurrentMaterial);
+  document.getElementById('save-material').addEventListener('click', openMaterialSaveModal);
   document.getElementById('export-csv').addEventListener('click', exportCsv);
   document.getElementById('export-pdf').addEventListener('click', () => window.print());
   document.querySelectorAll('.material-type-filter').forEach((button) => {
@@ -1293,7 +1322,13 @@ function attachEvents() {
       event.target.closest('.row').remove();
       calculateFormulation();
     }
+
+    if (event.target.id === 'close-material-modal' || event.target.id === 'cancel-material-save') {
+      closeMaterialSaveModal();
+    }
   });
+
+  document.getElementById('confirm-material-save').addEventListener('click', saveCurrentMaterial);
 
   document.addEventListener('input', (event) => {
     if (event.target.matches('.percentage-input')) {

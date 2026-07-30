@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resin Formulator</title>
-    <link rel="stylesheet" href="styles.css?v=20260729-2" />
+    <link rel="stylesheet" href="styles.css?v=20260730-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -141,7 +141,45 @@
       </main>
     </div>
 
+    <div id="material-save-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="material-save-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="material-save-title">Save material</h3>
+          <button type="button" class="icon-button" id="close-material-modal" aria-label="Close">×</button>
+        </div>
+        <div class="modal-form">
+          <label>
+            Material name
+            <input id="material-save-name" type="text" placeholder="My material" />
+          </label>
+          <label>
+            System name
+            <input id="material-save-system" type="text" placeholder="epoxy, polyaspartic, fluoronated, acrylic..." />
+          </label>
+          <label>
+            Category
+            <select id="material-save-category">
+              <option value="resin">Resin</option>
+              <option value="curative">Curative</option>
+            </select>
+          </label>
+          <label>
+            Equivalent weight
+            <input id="material-save-eq-weight" type="number" min="0" step="0.01" placeholder="190" />
+          </label>
+          <label>
+            Chemistry notes
+            <input id="material-save-chemistry" type="text" placeholder="e.g. aromatic amine, cycloaliphatic epoxy" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="cancel-material-save">Cancel</button>
+          <button type="button" id="confirm-material-save">Save material</button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js?v=20260729-2"></script>
+    <script src="app.js?v=20260730-1"></script>
   </body>
 </html>
