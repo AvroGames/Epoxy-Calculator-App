@@ -316,7 +316,7 @@ function populateMaterialsFilters() {
     return;
   }
 
-  const systems = Array.from(new Set(sharedMaterialsRows.map((item) => (item.systemLabel || item.system || 'epoxy').toString()))).sort((a, b) => a.localeCompare(b));
+  const systems = Array.from(new Set(getMaterialLibraryRows().map((item) => (item.systemLabel || item.system || 'epoxy').toString()))).sort((a, b) => a.localeCompare(b));
   const currentValue = systemSelect.value || 'all';
   const previousValue = currentValue === 'all' ? '' : currentValue;
   systemSelect.innerHTML = '<option value="all">All systems</option>' + systems.map((system) => `<option value="${system}">${system}</option>`).join('');
@@ -327,6 +327,52 @@ function populateMaterialsFilters() {
   }
 }
 
+function getMaterialLibraryRows() {
+  const rowMap = new Map();
+
+  const addRow = (item) => {
+    const system = (item.systemLabel || item.system || 'epoxy').toString().trim();
+    const normalizedSystem = system || 'epoxy';
+    const category = item.type === 'amine' ? 'curative' : 'resin';
+    const key = `${normalizedSystem}:${category}:${item.name}:${item.eqWeight}`;
+    if (!rowMap.has(key)) {
+      rowMap.set(key, {
+        ...item,
+        systemLabel: normalizedSystem,
+        categoryLabel: category === 'curative' ? 'Curative' : 'Resin',
+        system: normalizedSystem.toLowerCase(),
+      });
+    }
+  };
+
+  (sharedMaterialsRows || []).forEach(addRow);
+
+  Object.entries(materialsState || {}).forEach(([systemKey, systemMaterials]) => {
+    if (!systemMaterials || typeof systemMaterials !== 'object') {
+      return;
+    }
+
+    const systemLabel = (systemKey || 'epoxy').toString();
+    const normalizedSystem = systemLabel.toLowerCase();
+    const addSystemItems = (type) => {
+      (Array.isArray(systemMaterials[type]) ? systemMaterials[type] : []).forEach((item) => {
+        addRow({
+          name: item.name,
+          type,
+          eqWeight: item.eqWeight,
+          system: normalizedSystem,
+          systemLabel,
+        });
+      });
+    };
+
+    addSystemItems('epoxy');
+    addSystemItems('amine');
+  });
+
+  return Array.from(rowMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function renderMaterialsLibrary() {
   const library = document.getElementById('materials-library');
   const filter = document.querySelector('.material-type-filter.active')?.dataset.materialFilter || 'all';
@@ -334,7 +380,7 @@ function renderMaterialsLibrary() {
   const categoryFilter = document.getElementById('materials-category-filter')?.value || 'all';
   const nameFilter = (document.getElementById('materials-name-filter')?.value || '').trim().toLowerCase();
 
-  const filteredRows = sharedMaterialsRows.filter((item) => {
+  const filteredRows = getMaterialLibraryRows().filter((item) => {
     const categoryMatch = filter === 'all'
       ? true
       : filter === 'curative' ? item.type === 'amine' : item.type === 'epoxy';
@@ -353,7 +399,7 @@ function renderMaterialsLibrary() {
     ? filteredRows.map((item) => `
         <tr>
           <td>${item.name}</td>
-          <td>${item.type === 'amine' ? 'Curative' : 'Resin'}</td>
+          <td>${item.categoryLabel || (item.type === 'amine' ? 'Curative' : 'Resin')}</td>
           <td>${item.systemLabel || item.system || 'epoxy'}</td>
           <td>${item.eqWeight}</td>
         </tr>
