@@ -25,6 +25,7 @@
 
       <div class="tab-bar" id="system-tabs">
         <button type="button" class="tab-button active" data-system="epoxy">Resin</button>
+        <button type="button" class="tab-button" data-system="save-material">Save material</button>
         <button type="button" class="tab-button" data-system="materials">Materials</button>
       </div>
 
@@ -40,6 +41,42 @@
             <button type="button" class="secondary material-type-filter" data-material-filter="curative">Curative</button>
           </div>
           <div id="materials-library" class="materials-library"></div>
+        </section>
+
+        <section id="save-material-view" class="card save-material-view hidden">
+          <div class="card-header">
+            <h2>Save a new material</h2>
+            <p class="materials-subtitle">Create a material entry for any system name, category, and equivalent weight.</p>
+          </div>
+          <div class="save-material-form">
+            <label>
+              Material name
+              <input id="save-material-name" type="text" placeholder="My material" />
+            </label>
+            <label>
+              System name
+              <input id="save-material-system" type="text" placeholder="epoxy, polyaspartic, fluoronated, acrylic..." />
+            </label>
+            <label>
+              Category
+              <select id="save-material-category">
+                <option value="resin">Resin</option>
+                <option value="curative">Curative</option>
+              </select>
+            </label>
+            <label>
+              Equivalent weight
+              <input id="save-material-eq-weight" type="number" min="0" step="0.01" placeholder="190" />
+            </label>
+            <label>
+              Chemistry notes
+              <input id="save-material-chemistry" type="text" placeholder="e.g. aromatic amine, cycloaliphatic epoxy" />
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="secondary" id="save-material-cancel">Cancel</button>
+            <button type="button" id="save-material-confirm">Save material</button>
+          </div>
         </section>
 
         <div class="grid" id="formulation-view">
@@ -139,44 +176,6 @@
           <div id="formula-grams" class="formula-grams"></div>
         </section>
       </main>
-    </div>
-
-    <div id="material-save-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="material-save-title">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3 id="material-save-title">Save material</h3>
-          <button type="button" class="icon-button" id="close-material-modal" aria-label="Close">×</button>
-        </div>
-        <div class="modal-form">
-          <label>
-            Material name
-            <input id="material-save-name" type="text" placeholder="My material" />
-          </label>
-          <label>
-            System name
-            <input id="material-save-system" type="text" placeholder="epoxy, polyaspartic, fluoronated, acrylic..." />
-          </label>
-          <label>
-            Category
-            <select id="material-save-category">
-              <option value="resin">Resin</option>
-              <option value="curative">Curative</option>
-            </select>
-          </label>
-          <label>
-            Equivalent weight
-            <input id="material-save-eq-weight" type="number" min="0" step="0.01" placeholder="190" />
-          </label>
-          <label>
-            Chemistry notes
-            <input id="material-save-chemistry" type="text" placeholder="e.g. aromatic amine, cycloaliphatic epoxy" />
-          </label>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="secondary" id="cancel-material-save">Cancel</button>
-          <button type="button" id="confirm-material-save">Save material</button>
-        </div>
-      </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

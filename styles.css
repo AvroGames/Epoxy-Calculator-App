@@ -54,12 +54,25 @@ body {
   display: none;
 }
 
-.materials-view {
+.materials-view,
+.save-material-view {
   display: none;
 }
 
-.materials-view.visible {
+.materials-view.visible,
+.save-material-view.visible {
   display: block;
+}
+
+.save-material-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.save-material-form label {
+  display: grid;
+  gap: 6px;
 }
 
 .materials-library {

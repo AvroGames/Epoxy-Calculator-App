@@ -9,17 +9,16 @@ const dbStatus = document.getElementById('db-status');
 const supabaseUrlInput = document.getElementById('supabase-url');
 const supabaseKeyInput = document.getElementById('supabase-key');
 
-function getMaterialSaveModalElements() {
+function getMaterialSaveViewElements() {
   return {
-    modal: document.getElementById('material-save-modal'),
-    nameInput: document.getElementById('material-save-name'),
-    systemInput: document.getElementById('material-save-system'),
-    categorySelect: document.getElementById('material-save-category'),
-    eqWeightInput: document.getElementById('material-save-eq-weight'),
-    chemistryInput: document.getElementById('material-save-chemistry'),
-    confirmButton: document.getElementById('confirm-material-save'),
-    cancelButton: document.getElementById('cancel-material-save'),
-    closeButton: document.getElementById('close-material-modal'),
+    view: document.getElementById('save-material-view'),
+    nameInput: document.getElementById('save-material-name'),
+    systemInput: document.getElementById('save-material-system'),
+    categorySelect: document.getElementById('save-material-category'),
+    eqWeightInput: document.getElementById('save-material-eq-weight'),
+    chemistryInput: document.getElementById('save-material-chemistry'),
+    confirmButton: document.getElementById('save-material-confirm'),
+    cancelButton: document.getElementById('save-material-cancel'),
   };
 }
 
@@ -350,13 +349,17 @@ function renderMaterialsLibrary() {
 }
 
 function setActiveSystemUI() {
-  const config = getSystemConfig();
+  const config = getSystemConfig(currentSystem === 'save-material' ? 'epoxy' : currentSystem);
   document.getElementById('app-title').textContent = currentSystem === 'materials'
     ? 'Browse saved materials and equivalent weights'
-    : `Build and balance ${config.label.toLowerCase()} formulations`;
+    : currentSystem === 'save-material'
+      ? 'Save and manage resin materials'
+      : `Build and balance ${config.label.toLowerCase()} formulations`;
   document.getElementById('app-description').textContent = currentSystem === 'materials'
     ? 'Review all saved materials across your coating systems and their equivalent weights.'
-    : config.description;
+    : currentSystem === 'save-material'
+      ? 'Create new material entries for any system name, category, and equivalent weight.'
+      : config.description;
   document.getElementById('resin-heading').textContent = config.resinLabel;
   document.getElementById('curative-heading').textContent = config.curativeLabel;
   document.querySelectorAll('.tab-button').forEach((button) => {
@@ -365,17 +368,17 @@ function setActiveSystemUI() {
 
   const formulationView = document.getElementById('formulation-view');
   const materialsView = document.getElementById('materials-view');
-  if (currentSystem === 'materials') {
-    formulationView.classList.add('hidden');
-    materialsView.classList.add('visible');
-  } else {
-    formulationView.classList.remove('hidden');
-    materialsView.classList.remove('visible');
-  }
+  const saveMaterialView = document.getElementById('save-material-view');
+  const isFormulationView = currentSystem !== 'materials' && currentSystem !== 'save-material';
+  formulationView.classList.toggle('hidden', !isFormulationView);
+  materialsView.classList.toggle('visible', currentSystem === 'materials');
+  saveMaterialView.classList.toggle('visible', currentSystem === 'save-material');
 
   const activeLabel = document.createElement('div');
   activeLabel.className = 'system-pill';
-  activeLabel.textContent = `${config.label} workflow active`;
+  activeLabel.textContent = currentSystem === 'save-material'
+    ? 'Material entry workflow active'
+    : `${config.label} workflow active`;
 
   const existingPill = document.querySelector('.system-pill');
   if (existingPill) {
@@ -415,18 +418,18 @@ function restoreFormState(systemKey) {
 }
 
 function switchSystem(systemKey) {
-  if (!systemCatalog[systemKey] && systemKey !== 'materials') {
+  if (!systemCatalog[systemKey] && systemKey !== 'materials' && systemKey !== 'save-material') {
     return;
   }
 
   uiState[currentSystem] = serializeFormState();
   currentSystem = systemKey;
   setActiveSystemUI();
-  if (systemKey !== 'materials') {
+  if (systemKey !== 'materials' && systemKey !== 'save-material') {
     restoreFormState(systemKey);
     populateTemplateSelect();
     refreshMaterialSelects();
-  } else {
+  } else if (systemKey === 'materials') {
     renderMaterialsLibrary();
   }
 }
@@ -1121,8 +1124,8 @@ async function saveCurrentTemplate() {
 }
 
 function openMaterialSaveModal() {
-  const elements = getMaterialSaveModalElements();
-  if (!elements.modal) {
+  const elements = getMaterialSaveViewElements();
+  if (!elements.view) {
     return;
   }
 
@@ -1131,17 +1134,16 @@ function openMaterialSaveModal() {
   elements.categorySelect.value = 'resin';
   elements.eqWeightInput.value = '';
   elements.chemistryInput.value = '';
-  elements.modal.classList.remove('hidden');
-  elements.nameInput.focus();
+  switchSystem('save-material');
+  window.setTimeout(() => elements.nameInput.focus(), 0);
 }
 
 function closeMaterialSaveModal() {
-  const elements = getMaterialSaveModalElements();
-  elements.modal?.classList.add('hidden');
+  switchSystem('epoxy');
 }
 
 async function saveCurrentMaterial() {
-  const elements = getMaterialSaveModalElements();
+  const elements = getMaterialSaveViewElements();
   const name = (elements.nameInput?.value || '').trim();
   if (!name) {
     window.alert('Please enter a material name.');
@@ -1215,7 +1217,7 @@ async function saveCurrentMaterial() {
   syncLocalMaterialsFromRemote(materialsState);
   rebuildAllMaterialSelects();
   renderMaterialsLibrary();
-  closeMaterialSaveModal();
+  switchSystem('epoxy');
   window.alert(`Saved ${displayName} to the shared ${normalizedCategory} list under ${normalizedSystem}.`);
 }
 
@@ -1271,7 +1273,9 @@ function attachEvents() {
   document.getElementById('calculate-btn').addEventListener('click', calculateFormulation);
   document.getElementById('reset-btn').addEventListener('click', resetForm);
   document.getElementById('save-template').addEventListener('click', saveCurrentTemplate);
-  document.getElementById('save-material').addEventListener('click', openMaterialSaveModal);
+  document.getElementById('save-material').addEventListener('click', () => {
+    openMaterialSaveModal();
+  });
   document.getElementById('export-csv').addEventListener('click', exportCsv);
   document.getElementById('export-pdf').addEventListener('click', () => window.print());
   document.querySelectorAll('.material-type-filter').forEach((button) => {
@@ -1322,13 +1326,11 @@ function attachEvents() {
       event.target.closest('.row').remove();
       calculateFormulation();
     }
-
-    if (event.target.id === 'close-material-modal' || event.target.id === 'cancel-material-save') {
-      closeMaterialSaveModal();
-    }
   });
 
-  document.getElementById('confirm-material-save').addEventListener('click', saveCurrentMaterial);
+  const saveViewElements = getMaterialSaveViewElements();
+  saveViewElements.confirmButton?.addEventListener('click', saveCurrentMaterial);
+  saveViewElements.cancelButton?.addEventListener('click', closeMaterialSaveModal);
 
   document.addEventListener('input', (event) => {
     if (event.target.matches('.percentage-input')) {
