@@ -40,6 +40,26 @@
             <button type="button" class="secondary material-type-filter" data-material-filter="resin">Resin</button>
             <button type="button" class="secondary material-type-filter" data-material-filter="curative">Curative</button>
           </div>
+          <div class="materials-sort-bar">
+            <label>
+              System
+              <select id="materials-system-filter">
+                <option value="all">All systems</option>
+              </select>
+            </label>
+            <label>
+              Category
+              <select id="materials-category-filter">
+                <option value="all">All categories</option>
+                <option value="resin">Resin</option>
+                <option value="curative">Curative</option>
+              </select>
+            </label>
+            <label>
+              Name
+              <input id="materials-name-filter" type="text" placeholder="Search by name" />
+            </label>
+          </div>
           <div id="materials-library" class="materials-library"></div>
         </section>
 

@@ -136,7 +136,21 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 12px 0 16px;
+  margin: 12px 0 8px;
+}
+
+.materials-sort-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.materials-sort-bar label {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
 }
 
 .material-type-filter.active {

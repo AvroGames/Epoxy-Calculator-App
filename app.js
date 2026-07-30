@@ -310,15 +310,44 @@ function createMaterialOptions(type) {
   `;
 }
 
+function populateMaterialsFilters() {
+  const systemSelect = document.getElementById('materials-system-filter');
+  if (!systemSelect) {
+    return;
+  }
+
+  const systems = Array.from(new Set(sharedMaterialsRows.map((item) => (item.systemLabel || item.system || 'epoxy').toString()))).sort((a, b) => a.localeCompare(b));
+  const currentValue = systemSelect.value || 'all';
+  const previousValue = currentValue === 'all' ? '' : currentValue;
+  systemSelect.innerHTML = '<option value="all">All systems</option>' + systems.map((system) => `<option value="${system}">${system}</option>`).join('');
+  if (previousValue) {
+    systemSelect.value = previousValue;
+  } else {
+    systemSelect.value = 'all';
+  }
+}
+
 function renderMaterialsLibrary() {
   const library = document.getElementById('materials-library');
   const filter = document.querySelector('.material-type-filter.active')?.dataset.materialFilter || 'all';
+  const systemFilter = document.getElementById('materials-system-filter')?.value || 'all';
+  const categoryFilter = document.getElementById('materials-category-filter')?.value || 'all';
+  const nameFilter = (document.getElementById('materials-name-filter')?.value || '').trim().toLowerCase();
+
   const filteredRows = sharedMaterialsRows.filter((item) => {
-    if (filter === 'all') {
-      return true;
-    }
-    return filter === 'curative' ? item.type === 'amine' : item.type === 'epoxy';
+    const categoryMatch = filter === 'all'
+      ? true
+      : filter === 'curative' ? item.type === 'amine' : item.type === 'epoxy';
+
+    const systemMatch = systemFilter === 'all' || (item.systemLabel || item.system || 'epoxy').toLowerCase() === systemFilter.toLowerCase();
+    const categoryValue = item.type === 'amine' ? 'curative' : 'resin';
+    const categoryMatchField = categoryFilter === 'all' || categoryValue === categoryFilter;
+    const nameMatch = !nameFilter || item.name.toLowerCase().includes(nameFilter);
+
+    return categoryMatch && systemMatch && categoryMatchField && nameMatch;
   });
+
+  populateMaterialsFilters();
 
   const rows = filteredRows.length
     ? filteredRows.map((item) => `
@@ -1285,6 +1314,10 @@ function attachEvents() {
       renderMaterialsLibrary();
     });
   });
+
+  document.getElementById('materials-system-filter')?.addEventListener('change', renderMaterialsLibrary);
+  document.getElementById('materials-category-filter')?.addEventListener('change', renderMaterialsLibrary);
+  document.getElementById('materials-name-filter')?.addEventListener('input', renderMaterialsLibrary);
   document.getElementById('connect-db').addEventListener('click', async () => {
     const config = {
       url: supabaseUrlInput.value.trim(),
