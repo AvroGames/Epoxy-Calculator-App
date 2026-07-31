@@ -123,8 +123,9 @@ function getDefaultGitHubRepository() {
 const GITHUB_REPOSITORY = getDefaultGitHubRepository();
 
 let supabaseClient = null;
-let materialsState = {};
+let materialsState = readMaterials();
 let templatesState = [];
+let previousSystemBeforeSave = 'epoxy';
 let dbConnected = false;
 let currentSystem = 'epoxy';
 let uiState = {};
@@ -306,7 +307,7 @@ function createMaterialOptions(type) {
   const remoteMaterials = getMergedMaterialOptions(type);
   return `
     <option value="">custom</option>
-    ${remoteMaterials.map((item) => `<option value="${item.name}" data-eq="${item.eqWeight}" data-name="${item.name}">${item.name} • eq ${item.eqWeight}</option>`).join('')}
+    ${remoteMaterials.map((item) => `<option value="${escapeHtml(item.name)}" data-eq="${escapeHtml(item.eqWeight)}" data-name="${escapeHtml(item.name)}">${escapeHtml(item.name)} • eq ${escapeHtml(item.eqWeight)}</option>`).join('')}
   `;
 }
 
@@ -398,10 +399,10 @@ function renderMaterialsLibrary() {
   const rows = filteredRows.length
     ? filteredRows.map((item) => `
         <tr>
-          <td>${item.name}</td>
-          <td>${item.categoryLabel || (item.type === 'amine' ? 'Curative' : 'Resin')}</td>
-          <td>${item.systemLabel || item.system || 'epoxy'}</td>
-          <td>${item.eqWeight}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.categoryLabel || (item.type === 'amine' ? 'Curative' : 'Resin'))}</td>
+          <td>${escapeHtml(item.systemLabel || item.system || 'epoxy')}</td>
+          <td>${escapeHtml(item.eqWeight)}</td>
         </tr>
       `).join('')
     : '<tr><td colspan="4">No materials match the selected filter.</td></tr>';
@@ -525,7 +526,7 @@ function createRowMarkup(type, data = {}) {
             <option value="Other additive" ${data.type === 'Other additive' ? 'selected' : ''}>Other additive</option>
             <option value="Filler" ${data.type === 'Filler' ? 'selected' : ''}>Filler</option>
           </select>
-          <input class="name-input" type="text" placeholder="Additive or filler name" value="${data.name || ''}" />
+          <input class="name-input" type="text" placeholder="Additive or filler name" value="${escapeHtml(data.name || '')}" />
           <input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="% of total" value="${data.percentage || ''}" />
         </div>
         <button class="icon-button remove-row" type="button">Remove</button>
@@ -535,13 +536,13 @@ function createRowMarkup(type, data = {}) {
 
   const container = type === 'epoxy' ? epoxyContainer : amineContainer;
   const isFirstRow = container.querySelectorAll('.row').length === 0;
-  const placeholder = type === 'epoxy' ? '% of epoxy A' : '% of curative A';
+  const placeholder = type === 'epoxy' ? '% of resin A' : '% of curative A';
 
   return `
     <div class="row">
       <div class="row-fields">
         <select class="material-select">${createMaterialOptions(type)}</select>
-        <input class="name-input" type="text" placeholder="Component name" value="${data.name || ''}" />
+        <input class="name-input" type="text" placeholder="Component name" value="${escapeHtml(data.name || '')}" />
         <input class="eq-weight-input" type="number" min="0" step="0.01" placeholder="Eq. weight" value="${data.eqWeight || ''}" />
         ${isFirstRow ? '' : `<input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="${placeholder}" value="${data.percentage || ''}" />`}
       </div>
@@ -638,6 +639,7 @@ function calculateBlendEquivalentWeight(rows) {
   return totalMassFactor / denominator;
 }
 
+// Blend-total enforcement is intentionally deferred; validation happens in calculateFormulation.
 function enforceBlendTotal(container) {
   return;
 }
@@ -649,6 +651,14 @@ function formatNumber(value) {
   return value.toFixed(2);
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function getBalanceState(epoxyBlendEq, amineBlendEq) {
   const difference = Math.abs(epoxyBlendEq - amineBlendEq);
   const average = (epoxyBlendEq + amineBlendEq) / 2;
@@ -657,16 +667,19 @@ function getBalanceState(epoxyBlendEq, amineBlendEq) {
   if (ratio <= 0.08) {
     return { className: 'good', message: 'Stoichiometric balance is maintained automatically from the selected ratios.' };
   }
-  return { className: 'good', message: 'Stoichiometric balance is maintained automatically from the selected ratios.' };
+  if (ratio <= 0.20) {
+    return { className: 'warn', message: `Blend equivalent weights differ by ${(ratio * 100).toFixed(1)}% — review your ratios.` };
+  }
+  return { className: 'alert', message: `Significant stoichiometric imbalance (${(ratio * 100).toFixed(1)}%) — verify your equivalent weights and blend ratios.` };
 }
 
 function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass, totalWeight, additiveMass, warnings, balance) {
   return `
     <div class="summary-grid">
       <div class="summary-row"><span>Target formulation weight</span><strong>${formatNumber(totalWeight)} g</strong></div>
-      <div class="summary-row"><span>Reactive mass (epoxy + amine)</span><strong>${formatNumber(epoxyBlendMass + amineBlendMass)} g</strong></div>
-      <div class="summary-row"><span>Epoxy blend eq. weight</span><strong>${formatNumber(epoxyBlendEq)}</strong></div>
-      <div class="summary-row"><span>Amine blend eq. weight</span><strong>${formatNumber(amineBlendEq)}</strong></div>
+      <div class="summary-row"><span>Reactive mass (resin + curative)</span><strong>${formatNumber(epoxyBlendMass + amineBlendMass)} g</strong></div>
+      <div class="summary-row"><span>Resin blend eq. weight</span><strong>${formatNumber(epoxyBlendEq)}</strong></div>
+      <div class="summary-row"><span>Curative blend eq. weight</span><strong>${formatNumber(amineBlendEq)}</strong></div>
       <div class="summary-row"><span>Additives and fillers</span><strong>${formatNumber(additiveMass)} g</strong></div>
     </div>
     <div class="balance-pill ${balance.className}">${balance.message}</div>
@@ -710,24 +723,24 @@ function buildBlendRows(rows, blendMass) {
 function buildResults(epoxyRows, amineRows, additives, epoxyBlendMass, amineBlendMass) {
   const epoxyCards = epoxyRows.map((row) => {
     const displayPercentage = Number.isFinite(row.displayPercentage) ? row.displayPercentage : row.percentage * 100;
-    return `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
+    return `<li>${escapeHtml(row.name)}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
   }).join('');
 
   const amineCards = amineRows.map((row) => {
     const displayPercentage = Number.isFinite(row.displayPercentage) ? row.displayPercentage : row.percentage * 100;
-    return `<li>${row.name}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
+    return `<li>${escapeHtml(row.name)}: ${formatNumber(row.mass)} g (${formatNumber(displayPercentage)}% of blend)</li>`;
   }).join('');
 
-  const additiveCards = additives.map((row) => `<li>${row.type}: ${row.name} — ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
+  const additiveCards = additives.map((row) => `<li>${escapeHtml(row.type)}: ${escapeHtml(row.name)} — ${formatNumber(row.mass)} g (${formatNumber(row.percentage)}% of total formulation)</li>`).join('');
 
   return `
     <div class="result-card">
-      <h3>Epoxy blend (${formatNumber(epoxyBlendMass)} g)</h3>
-      <ul>${epoxyCards || '<li>No epoxy rows entered.</li>'}</ul>
+      <h3>Resin blend (${formatNumber(epoxyBlendMass)} g)</h3>
+      <ul>${epoxyCards || '<li>No resin rows entered.</li>'}</ul>
     </div>
     <div class="result-card">
-      <h3>Amine blend (${formatNumber(amineBlendMass)} g)</h3>
-      <ul>${amineCards || '<li>No amine rows entered.</li>'}</ul>
+      <h3>Curative blend (${formatNumber(amineBlendMass)} g)</h3>
+      <ul>${amineCards || '<li>No curative rows entered.</li>'}</ul>
     </div>
     <div class="result-card">
       <h3>Additives & fillers</h3>
@@ -738,9 +751,9 @@ function buildResults(epoxyRows, amineRows, additives, epoxyBlendMass, amineBlen
 
 function renderFormulaGrams(epoxyRows, amineRows, additiveRows) {
   const rows = [
-    ...epoxyRows.map((row) => ({ label: `${row.name} (epoxy)`, grams: row.mass })),
-    ...amineRows.map((row) => ({ label: `${row.name} (amine)`, grams: row.mass })),
-    ...additiveRows.map((row) => ({ label: `${row.type}: ${row.name}`, grams: row.mass })),
+    ...epoxyRows.map((row) => ({ label: `${escapeHtml(row.name)} (resin)`, grams: row.mass })),
+    ...amineRows.map((row) => ({ label: `${escapeHtml(row.name)} (curative)`, grams: row.mass })),
+    ...additiveRows.map((row) => ({ label: `${escapeHtml(row.type)}: ${escapeHtml(row.name)}`, grams: row.mass })),
   ].filter((row) => row.grams > 0);
 
   if (rows.length === 0) {
@@ -781,7 +794,7 @@ function calculateFormulation() {
   }
 
   if (epoxyRows.length === 0 || amineRows.length === 0) {
-    summary.innerHTML = '<div class="warning">Add at least one epoxy and one amine component before calculating.</div>';
+    summary.innerHTML = '<div class="warning">Add at least one resin and one curative component before calculating.</div>';
     resultsList.innerHTML = '';
     formulaGrams.innerHTML = '<div class="formula-gram-row"><span>Enter values to see the grams breakdown.</span></div>';
     return;
@@ -915,24 +928,6 @@ function initSupabaseClient() {
   }
 
   return window.supabase.createClient(url, key);
-}
-
-function getDbConfig() {
-  try {
-    return JSON.parse(localStorage.getItem(DB_CONFIG_KEY) || '{}');
-  } catch (error) {
-    return {};
-  }
-}
-
-function saveDbConfig(config) {
-  localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
-}
-
-function setDbStatus(message, connected = false) {
-  dbConnected = connected;
-  dbStatus.textContent = message;
-  dbStatus.style.color = connected ? '#9be3ae' : '#9eb7ce';
 }
 
 function showRefreshFeedback(message) {
@@ -1195,7 +1190,11 @@ async function saveCurrentTemplate() {
   }
 
   populateTemplateSelect();
-  templateSelect.value = templates.length - 1;
+  const allOptions = Array.from(templateSelect.options);
+  const newOptionIndex = allOptions.findIndex((opt) => opt.textContent === name);
+  if (newOptionIndex >= 0) {
+    templateSelect.selectedIndex = newOptionIndex;
+  }
 }
 
 function openMaterialSaveModal() {
@@ -1204,6 +1203,7 @@ function openMaterialSaveModal() {
     return;
   }
 
+  previousSystemBeforeSave = currentSystem;
   elements.nameInput.value = '';
   elements.systemInput.value = '';
   elements.categorySelect.value = 'resin';
@@ -1214,7 +1214,7 @@ function openMaterialSaveModal() {
 }
 
 function closeMaterialSaveModal() {
-  switchSystem('epoxy');
+  switchSystem(previousSystemBeforeSave);
 }
 
 async function saveCurrentMaterial() {
@@ -1292,7 +1292,7 @@ async function saveCurrentMaterial() {
   syncLocalMaterialsFromRemote(materialsState);
   rebuildAllMaterialSelects();
   renderMaterialsLibrary();
-  switchSystem('epoxy');
+  switchSystem(previousSystemBeforeSave);
   window.alert(`Saved ${displayName} to the shared ${normalizedCategory} list under ${normalizedSystem}.`);
 }
 
@@ -1312,8 +1312,8 @@ function exportCsv() {
   const additiveRows = collectRows(additiveContainer, 'additive');
   const rows = [
     ['section', 'name', 'type', 'percentage', 'eqWeight'],
-    ...epoxyRows.map((row) => ['epoxy', row.name, '', row.percentage, row.eqWeight]),
-    ...amineRows.map((row) => ['amine', row.name, '', row.percentage, row.eqWeight]),
+    ...epoxyRows.map((row) => ['resin', row.name, '', row.percentage, row.eqWeight]),
+    ...amineRows.map((row) => ['curative', row.name, '', row.percentage, row.eqWeight]),
     ...additiveRows.map((row) => ['additive', row.name, row.type, row.percentage, '']),
   ];
 
@@ -1322,7 +1322,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = 'epoxy-formulation.csv';
+  anchor.download = 'polymer-formulation.csv';
   anchor.click();
   URL.revokeObjectURL(url);
 }
