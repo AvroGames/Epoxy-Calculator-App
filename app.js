@@ -712,17 +712,10 @@ function escapeHtml(str) {
 }
 
 function getBalanceState(epoxyBlendEq, amineBlendEq) {
-  const difference = Math.abs(epoxyBlendEq - amineBlendEq);
-  const average = (epoxyBlendEq + amineBlendEq) / 2;
-  const ratio = average === 0 ? 0 : difference / average;
-
-  if (ratio <= 0.08) {
-    return { className: 'good', message: 'Stoichiometric balance is maintained automatically from the selected ratios.' };
-  }
-  if (ratio <= 0.20) {
-    return { className: 'warn', message: `Blend equivalent weights differ by ${(ratio * 100).toFixed(1)}% — review your ratios.` };
-  }
-  return { className: 'alert', message: `Significant stoichiometric imbalance (${(ratio * 100).toFixed(1)}%) — verify your equivalent weights and blend ratios.` };
+  return {
+    className: 'good',
+    message: 'Stoichiometric balance is calculated automatically from equivalent weights, blend ratios, and total formulation weight.',
+  };
 }
 
 function buildSummary(epoxyBlendEq, amineBlendEq, epoxyBlendMass, amineBlendMass, totalWeight, additiveMass, warnings, balance) {
