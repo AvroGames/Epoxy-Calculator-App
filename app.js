@@ -429,12 +429,16 @@ function setActiveSystemUI() {
   document.getElementById('app-title').textContent = currentSystem === 'materials'
     ? 'Browse saved materials and equivalent weights'
     : currentSystem === 'save-material'
-      ? 'Save and manage resin materials'
+      ? 'Save and manage polymer materials'
+      : currentSystem === 'epoxy'
+        ? 'Build and balance polymer formulations'
       : `Build and balance ${config.label.toLowerCase()} formulations`;
   document.getElementById('app-description').textContent = currentSystem === 'materials'
-    ? 'Review all saved materials across your coating systems and their equivalent weights.'
+    ? 'Review all saved materials across polymer systems and compare their equivalent weights.'
     : currentSystem === 'save-material'
-      ? 'Create new material entries for any system name, category, and equivalent weight.'
+      ? 'Create material entries for any polymer system, category, and equivalent weight.'
+      : currentSystem === 'epoxy'
+        ? 'Use one workspace for equivalent-weight polymer chemistry: define resin and curative blends, add additives, and calculate gram-based formulations.'
       : config.description;
   document.getElementById('resin-heading').textContent = config.resinLabel;
   document.getElementById('curative-heading').textContent = config.curativeLabel;
@@ -454,6 +458,8 @@ function setActiveSystemUI() {
   activeLabel.className = 'system-pill';
   activeLabel.textContent = currentSystem === 'save-material'
     ? 'Material entry workflow active'
+    : currentSystem === 'epoxy'
+      ? 'Polymer workspace active'
     : `${config.label} workflow active`;
 
   const existingPill = document.querySelector('.system-pill');
@@ -482,6 +488,8 @@ function restoreFormState(systemKey) {
   (state.epoxy || []).forEach((row) => addRow('epoxy', row));
   (state.amine || []).forEach((row) => addRow('amine', row));
   (state.additives || []).forEach((row) => addRow('additive', row));
+  syncBlendPercentageInputs(epoxyContainer);
+  syncBlendPercentageInputs(amineContainer);
 
   if (!state.epoxy?.length && !state.amine?.length && !state.additives?.length) {
     summary.innerHTML = '';
@@ -565,9 +573,19 @@ function syncBlendPercentageInputs(container) {
     return;
   }
 
+  const labelGroup = document.querySelector(container.id === 'epoxy-rows' ? '.column-labels.epoxy-labels' : '.column-labels.amine-labels');
   const isResinContainer = container.id === 'epoxy-rows';
   const placeholder = isResinContainer ? '% of resin A' : '% of curative A';
   const rows = Array.from(container.querySelectorAll('.row'));
+  const showBlendPercentageColumn = rows.length > 1;
+
+  if (labelGroup) {
+    const percentageLabel = labelGroup.querySelector('span:last-child');
+    if (percentageLabel) {
+      percentageLabel.style.display = showBlendPercentageColumn ? '' : 'none';
+    }
+    labelGroup.classList.toggle('compact-blend-labels', !showBlendPercentageColumn);
+  }
 
   rows.forEach((row, index) => {
     const rowFields = row.querySelector('.row-fields');
@@ -1191,6 +1209,8 @@ function applyTemplate(template) {
   (template.epoxy || []).forEach((row) => addRow('epoxy', row));
   (template.amine || []).forEach((row) => addRow('amine', row));
   (template.additives || []).forEach((row) => addRow('additive', row));
+  syncBlendPercentageInputs(epoxyContainer);
+  syncBlendPercentageInputs(amineContainer);
   calculateFormulation();
 }
 
@@ -1487,6 +1507,8 @@ function attachEvents() {
 
 attachEvents();
 setActiveSystemUI();
+syncBlendPercentageInputs(epoxyContainer);
+syncBlendPercentageInputs(amineContainer);
 loadBuildVersion();
 window.addEventListener('supabase-data-refreshed', () => {
   rebuildAllMaterialSelects();
