@@ -555,8 +555,42 @@ function addRow(type, data = {}) {
   const target = type === 'epoxy' ? epoxyContainer : type === 'amine' ? amineContainer : additiveContainer;
   target.insertAdjacentHTML('beforeend', createRowMarkup(type, data));
   if (type === 'epoxy' || type === 'amine') {
+    syncBlendPercentageInputs(type === 'epoxy' ? epoxyContainer : amineContainer);
     refreshMaterialSelects();
   }
+}
+
+function syncBlendPercentageInputs(container) {
+  if (!container) {
+    return;
+  }
+
+  const isResinContainer = container.id === 'epoxy-rows';
+  const placeholder = isResinContainer ? '% of resin A' : '% of curative A';
+  const rows = Array.from(container.querySelectorAll('.row'));
+
+  rows.forEach((row, index) => {
+    const rowFields = row.querySelector('.row-fields');
+    if (!rowFields) {
+      return;
+    }
+
+    const percentageInput = row.querySelector('.percentage-input');
+    if (index === 0) {
+      percentageInput?.remove();
+      return;
+    }
+
+    if (percentageInput) {
+      percentageInput.placeholder = placeholder;
+      return;
+    }
+
+    rowFields.insertAdjacentHTML(
+      'beforeend',
+      `<input class="percentage-input" type="number" min="0" max="100" step="0.01" placeholder="${placeholder}" />`,
+    );
+  });
 }
 
 function clearRows(container) {
@@ -1402,7 +1436,12 @@ function attachEvents() {
 
   document.addEventListener('click', (event) => {
     if (event.target.classList.contains('remove-row')) {
-      event.target.closest('.row').remove();
+      const row = event.target.closest('.row');
+      const container = row?.parentElement;
+      row?.remove();
+      if (container?.id === 'epoxy-rows' || container?.id === 'amine-rows') {
+        syncBlendPercentageInputs(container);
+      }
       calculateFormulation();
     }
   });
@@ -1431,8 +1470,11 @@ function attachEvents() {
       const selectedOption = event.target.selectedOptions[0];
       const row = event.target.closest('.row');
       if (selectedOption && selectedOption.value) {
-        row.querySelector('.name-input').value = selectedOption.value;
-        row.querySelector('.eq-weight-input').value = selectedOption.dataset.eq || '';
+        const optionName = selectedOption.dataset.name || selectedOption.value;
+        const optionEq = selectedOption.dataset.eq
+          || (selectedOption.textContent.match(/eq\s+([0-9]*\.?[0-9]+)/i)?.[1] || '');
+        row.querySelector('.name-input').value = optionName;
+        row.querySelector('.eq-weight-input').value = optionEq;
       }
       calculateFormulation();
     }
