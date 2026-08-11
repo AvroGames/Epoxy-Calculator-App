@@ -1374,6 +1374,192 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+function parseDisplayedNumber(value) {
+  const match = String(value || '').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
+}
+
+function readSummaryValue(label) {
+  const rows = Array.from(summary.querySelectorAll('.summary-row'));
+  const match = rows.find((row) => row.querySelector('span')?.textContent?.trim() === label);
+  const rawValue = match?.querySelector('strong')?.textContent || '';
+  return parseDisplayedNumber(rawValue);
+}
+
+function readBlendMassesFromResults(cardIndex) {
+  const rows = Array.from(document.querySelectorAll(`#results-list .result-card:nth-child(${cardIndex}) li`));
+  return rows.map((row) => {
+    const text = row.textContent || '';
+    const match = text.match(/:\s*([0-9]*\.?[0-9]+)\s*g/i);
+    return match ? Number(match[1]) : NaN;
+  }).filter((value) => Number.isFinite(value));
+}
+
+function valuesAreClose(actual, expected, tolerance = 0.03) {
+  return Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
+}
+
+function runSelfTestSuite() {
+  const activeSystem = currentSystem;
+  const previousState = serializeFormState();
+  const tolerance = 0.03;
+  const cases = [
+    {
+      name: 'Simple 2:1 stoichiometric split',
+      input: {
+        totalWeight: 100,
+        resin: [{ name: 'R1', eqWeight: 190 }],
+        curative: [{ name: 'C1', eqWeight: 95 }],
+        additives: [],
+      },
+      expected: {
+        targetWeight: 100,
+        reactiveMass: 100,
+        resinBlendEq: 190,
+        curativeBlendEq: 95,
+        additiveMass: 0,
+        resinMasses: [66.67],
+        curativeMasses: [33.33],
+      },
+    },
+    {
+      name: 'Reactive mass reduced by additives',
+      input: {
+        totalWeight: 100,
+        resin: [{ name: 'R1', eqWeight: 190 }],
+        curative: [{ name: 'C1', eqWeight: 95 }],
+        additives: [{ type: 'Filler', name: 'F1', percentage: 10 }],
+      },
+      expected: {
+        targetWeight: 100,
+        reactiveMass: 90,
+        resinBlendEq: 190,
+        curativeBlendEq: 95,
+        additiveMass: 10,
+        resinMasses: [60.0],
+        curativeMasses: [30.0],
+      },
+    },
+    {
+      name: 'Complex multi-row blend with additives',
+      input: {
+        totalWeight: 250,
+        resin: [
+          { name: 'R1', eqWeight: 200 },
+          { name: 'R2', eqWeight: 100, percentage: 50 },
+          { name: 'R3', eqWeight: 250, percentage: 25 },
+        ],
+        curative: [
+          { name: 'C1', eqWeight: 120 },
+          { name: 'C2', eqWeight: 240, percentage: 40 },
+          { name: 'C3', eqWeight: 90, percentage: 20 },
+        ],
+        additives: [{ type: 'Filler', name: 'F2', percentage: 15 }],
+      },
+      expected: {
+        targetWeight: 250,
+        reactiveMass: 212.5,
+        resinBlendEq: 159.09,
+        curativeBlendEq: 130.91,
+        additiveMass: 37.5,
+        resinMasses: [66.61, 33.31, 16.65],
+        curativeMasses: [59.95, 23.98, 11.99],
+      },
+    },
+    {
+      name: 'Equal blended equivalent weights',
+      input: {
+        totalWeight: 180,
+        resin: [
+          { name: 'R1', eqWeight: 200 },
+          { name: 'R2', eqWeight: 100, percentage: 50 },
+        ],
+        curative: [
+          { name: 'C1', eqWeight: 300 },
+          { name: 'C2', eqWeight: 100, percentage: 100 },
+        ],
+        additives: [{ type: 'Other additive', name: 'A1', percentage: 20 }],
+      },
+      expected: {
+        targetWeight: 180,
+        reactiveMass: 144,
+        resinBlendEq: 150,
+        curativeBlendEq: 150,
+        additiveMass: 36,
+        resinMasses: [48.0, 24.0],
+        curativeMasses: [36.0, 36.0],
+      },
+    },
+  ];
+
+  const failures = [];
+
+  cases.forEach((testCase) => {
+    clearRows(epoxyContainer);
+    clearRows(amineContainer);
+    clearRows(additiveContainer);
+    document.getElementById('total-weight').value = String(testCase.input.totalWeight);
+
+    (testCase.input.resin || []).forEach((row) => addRow('epoxy', row));
+    (testCase.input.curative || []).forEach((row) => addRow('amine', row));
+    (testCase.input.additives || []).forEach((row) => addRow('additive', row));
+    calculateFormulation();
+
+    const observed = {
+      targetWeight: readSummaryValue('Target formulation weight'),
+      reactiveMass: readSummaryValue('Reactive mass (resin + curative)'),
+      resinBlendEq: readSummaryValue('Resin blend eq. weight'),
+      curativeBlendEq: readSummaryValue('Curative blend eq. weight'),
+      additiveMass: readSummaryValue('Additives and fillers'),
+      resinMasses: readBlendMassesFromResults(1),
+      curativeMasses: readBlendMassesFromResults(2),
+    };
+
+    const checks = [
+      ['targetWeight', observed.targetWeight, testCase.expected.targetWeight],
+      ['reactiveMass', observed.reactiveMass, testCase.expected.reactiveMass],
+      ['resinBlendEq', observed.resinBlendEq, testCase.expected.resinBlendEq],
+      ['curativeBlendEq', observed.curativeBlendEq, testCase.expected.curativeBlendEq],
+      ['additiveMass', observed.additiveMass, testCase.expected.additiveMass],
+    ];
+
+    testCase.expected.resinMasses.forEach((value, index) => {
+      checks.push([`resinMasses[${index}]`, observed.resinMasses[index], value]);
+    });
+    testCase.expected.curativeMasses.forEach((value, index) => {
+      checks.push([`curativeMasses[${index}]`, observed.curativeMasses[index], value]);
+    });
+
+    checks.forEach(([label, actual, expected]) => {
+      if (!valuesAreClose(actual, expected, tolerance)) {
+        failures.push(`${testCase.name} :: ${label} expected ${expected.toFixed(2)} got ${Number.isFinite(actual) ? actual.toFixed(2) : 'NaN'}`);
+      }
+    });
+  });
+
+  uiState[activeSystem] = previousState;
+  restoreFormState(activeSystem);
+
+  const balanceText = document.querySelector('.balance-pill')?.textContent?.trim() || '';
+  if (balanceText && !balanceText.toLowerCase().includes('stoichiometric balance is calculated automatically')) {
+    failures.push('Balance message check failed: stoichiometric status text is not the expected automatic-balance message.');
+  }
+
+  if (!failures.length) {
+    const successMessage = `Self test passed: ${cases.length}/${cases.length} known formulations matched expected stoichiometric results (±${tolerance.toFixed(2)} tolerance).`;
+    showRefreshFeedback(successMessage);
+    window.alert(successMessage);
+    return;
+  }
+
+  const headline = `Self test found ${failures.length} issue${failures.length === 1 ? '' : 's'}.`;
+  const detailLines = failures.slice(0, 8).join('\n');
+  const suffix = failures.length > 8 ? `\n...and ${failures.length - 8} more.` : '';
+  const failureMessage = `${headline}\n\n${detailLines}${suffix}`;
+  showRefreshFeedback(headline);
+  window.alert(failureMessage);
+}
+
 function resetExample() {
   clearRows(epoxyContainer);
   clearRows(amineContainer);
@@ -1398,6 +1584,7 @@ function attachEvents() {
   document.getElementById('save-material').addEventListener('click', () => {
     openMaterialSaveModal();
   });
+  document.getElementById('self-test').addEventListener('click', runSelfTestSuite);
   document.getElementById('export-csv').addEventListener('click', exportCsv);
   document.getElementById('export-pdf').addEventListener('click', () => window.print());
   document.querySelectorAll('.material-type-filter').forEach((button) => {
